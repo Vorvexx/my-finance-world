@@ -1,960 +1,272 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  computeNetWorthSummary,
+  emptyForm,
+  expectedCashFlows,
+  formatCurrency,
+  formatExactCurrency,
+  formatUpdateTimestamp,
+  getGroupAccounts,
+  getGroupTotal,
+  groups,
+  sampleAccounts,
+  sampleCashFlows,
+  STORAGE_KEY,
+  timeRanges,
+  UPDATED_KEY,
+} from "@/lib/constants/sample-data";
+import type { AccountForm, CashFlow, FinancialAccount, GroupKey, TimeRangeKey } from "@/lib/constants/sample-data";
 
-type AccountType = "asset" | "liability";
-
-type GroupKey =
-  | "cash"
-  | "investments"
-  | "property"
-  | "debts"
-  | "other";
-
-type FinancialAccount = {
-  id: string;
-  name: string;
-  institution: string;
-  balance: number;
-  type: AccountType;
-  group: GroupKey;
-  updatedAt: string;
+const groupIcons: Record<GroupKey, string> = {
+  cash: "↙",
+  investments: "↗",
+  property: "⌂",
+  debts: "−",
+  other: "◇",
 };
 
-type AccountForm = {
-  name: string;
-  institution: string;
-  balance: string;
-  type: AccountType;
-  group: GroupKey;
-};
-
-type GroupDefinition = {
-  key: GroupKey;
-  name: string;
-  description: string;
-  defaultType: AccountType;
-  x: number;
-  y: number;
-};
-
-const STORAGE_KEY = "my-finance-world-real-accounts-v1";
-const UPDATED_KEY = "my-finance-world-last-updated-v1";
-
-const groups: GroupDefinition[] = [
-  {
-    key: "cash",
-    name: "Cash",
-    description: "Chequing and savings",
-    defaultType: "asset",
-    x: 15,
-    y: 25,
-  },
-  {
-    key: "investments",
-    name: "Investments",
-    description: "TFSA, RRSP and pensions",
-    defaultType: "asset",
-    x: 84,
-    y: 22,
-  },
-  {
-    key: "property",
-    name: "Property",
-    description: "Home, vehicle and valuables",
-    defaultType: "asset",
-    x: 84,
-    y: 69,
-  },
-  {
-    key: "debts",
-    name: "Debts",
-    description: "Mortgage, loans and cards",
-    defaultType: "liability",
-    x: 50,
-    y: 87,
-  },
-  {
-    key: "other",
-    name: "Other",
-    description: "Other assets or liabilities",
-    defaultType: "asset",
-    x: 15,
-    y: 69,
-  },
-];
-
-const emptyForm: AccountForm = {
-  name: "",
-  institution: "",
-  balance: "",
-  type: "asset",
-  group: "cash",
-};
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: "CAD",
-    maximumFractionDigits: 0,
-  }).format(value);
-
-const formatExactCurrency = (value: number) =>
-  new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency: "CAD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-
-const accountPositions = [
-  { x: 18, y: 24 },
-  { x: 50, y: 14 },
-  { x: 82, y: 24 },
-  { x: 86, y: 61 },
-  { x: 66, y: 82 },
-  { x: 34, y: 82 },
-  { x: 14, y: 61 },
-  { x: 50, y: 92 },
-];
+const sumFlows = (flows: CashFlow[]) => flows.reduce((sum, item) => sum + item.amount, 0);
 
 export default function Home() {
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+  const [accounts, setAccounts] = useState<FinancialAccount[]>(sampleAccounts);
   const [loaded, setLoaded] = useState(false);
-
-  const [selectedGroup, setSelectedGroup] =
-    useState<GroupKey | null>(null);
-
+  const [range, setRange] = useState<TimeRangeKey>("month");
+  const [selectedGroup, setSelectedGroup] = useState<GroupKey | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AccountForm>(emptyForm);
-
-  const [lastUpdated, setLastUpdated] = useState("No data entered yet");
+  const [lastUpdated, setLastUpdated] = useState("Sample snapshot");
 
   useEffect(() => {
     const savedAccounts = localStorage.getItem(STORAGE_KEY);
     const savedUpdatedTime = localStorage.getItem(UPDATED_KEY);
-
-    if (savedAccounts) {
-      try {
-        const parsedAccounts = JSON.parse(
-          savedAccounts,
-        ) as FinancialAccount[];
-
-        setAccounts(parsedAccounts);
-      } catch {
-        setAccounts([]);
+    const frame = requestAnimationFrame(() => {
+      if (savedAccounts) {
+        try {
+          setAccounts(JSON.parse(savedAccounts) as FinancialAccount[]);
+        } catch {
+          setAccounts(sampleAccounts);
+        }
       }
-    }
-
-    if (savedUpdatedTime) {
-      setLastUpdated(savedUpdatedTime);
-    }
-
-    setLoaded(true);
+      if (savedUpdatedTime) setLastUpdated(savedUpdatedTime);
+      setLoaded(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
-    if (!loaded) {
-      return;
-    }
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    if (loaded) localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
   }, [accounts, loaded]);
 
-  const assets = useMemo(
-    () => accounts.filter((account) => account.type === "asset"),
+  const { totalAssets, totalLiabilities, netWorth } = useMemo(
+    () => computeNetWorthSummary(accounts),
     [accounts],
   );
 
-  const liabilities = useMemo(
-    () => accounts.filter((account) => account.type === "liability"),
-    [accounts],
-  );
+  const selectedRange = timeRanges.find((item) => item.key === range) ?? timeRanges[3];
+  const rangeFlows = sampleCashFlows.filter((item) => item.daysAgo <= selectedRange.days);
+  const inflows = rangeFlows.filter((item) => item.direction === "inflow");
+  const outflows = rangeFlows.filter((item) => item.direction === "outflow");
+  const totalInflow = sumFlows(inflows);
+  const totalOutflow = sumFlows(outflows);
+  const cashMovement = totalInflow - totalOutflow;
 
-  const totalAssets = useMemo(
-    () => assets.reduce((total, account) => total + account.balance, 0),
-    [assets],
-  );
+  const topInflows = [...inflows].sort((a, b) => b.amount - a.amount).slice(0, 3);
+  const topOutflows = [...outflows].sort((a, b) => b.amount - a.amount).slice(0, 3);
+  const categoryTotals = (() => {
+    const totals = new Map<string, number>();
+    outflows.forEach((item) => totals.set(item.category, (totals.get(item.category) ?? 0) + item.amount));
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  })();
+  const maxCategory = categoryTotals[0]?.[1] ?? 1;
 
-  const totalLiabilities = useMemo(
-    () =>
-      liabilities.reduce(
-        (total, account) => total + account.balance,
-        0,
-      ),
-    [liabilities],
-  );
-
-  const netWorth = totalAssets - totalLiabilities;
-
-  const selectedGroupDefinition = groups.find(
-    (group) => group.key === selectedGroup,
-  );
-
-  const selectedGroupAccounts = useMemo(
-    () =>
-      selectedGroup
-        ? accounts.filter((account) => account.group === selectedGroup)
-        : [],
-    [accounts, selectedGroup],
-  );
-
-  const updateTimestamp = () => {
-    const timestamp = new Intl.DateTimeFormat("en-CA", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date());
-
-    setLastUpdated(timestamp);
-    localStorage.setItem(UPDATED_KEY, timestamp);
-
-    return timestamp;
-  };
-
-  const openNewAccountForm = (group: GroupKey = "cash") => {
-    const selectedDefinition = groups.find(
-      (groupDefinition) => groupDefinition.key === group,
-    );
-
-    setEditingId(null);
-
-    setForm({
-      name: "",
-      institution: "",
-      balance: "",
-      group,
-      type: selectedDefinition?.defaultType ?? "asset",
-    });
-
-    setIsModalOpen(true);
-  };
-
-  const openEditForm = (account: FinancialAccount) => {
-    setEditingId(account.id);
-
-    setForm({
+  const openAccountForm = (group: GroupKey = "cash", account?: FinancialAccount) => {
+    setEditingId(account?.id ?? null);
+    setForm(account ? {
       name: account.name,
       institution: account.institution,
       balance: String(account.balance),
       type: account.type,
       group: account.group,
-    });
-
+    } : { ...emptyForm, group, type: groups.find((item) => item.key === group)?.defaultType ?? "asset" });
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
+  const saveAccount = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const balance = Number(form.balance.replace(/[$,\s]/g, ""));
+    if (!form.name.trim() || Number.isNaN(balance) || balance < 0) return;
+    const updatedAt = formatUpdateTimestamp();
+    const nextAccount = { ...form, balance, name: form.name.trim(), institution: form.institution.trim(), updatedAt };
+    setAccounts((current) => editingId
+      ? current.map((item) => item.id === editingId ? { ...item, ...nextAccount } : item)
+      : [...current, { ...nextAccount, id: crypto.randomUUID() }]);
+    setLastUpdated(updatedAt);
+    localStorage.setItem(UPDATED_KEY, updatedAt);
     setIsModalOpen(false);
     setEditingId(null);
-    setForm(emptyForm);
-  };
-
-  const handleGroupClick = (group: GroupDefinition) => {
-    const groupAccounts = accounts.filter(
-      (account) => account.group === group.key,
-    );
-
-    if (groupAccounts.length === 0) {
-      openNewAccountForm(group.key);
-      return;
-    }
-
-    setSelectedGroup(group.key);
-  };
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedBalance = Number(
-      form.balance.replace(/[$,\s]/g, ""),
-    );
-
-    if (
-      !form.name.trim() ||
-      Number.isNaN(normalizedBalance) ||
-      normalizedBalance < 0
-    ) {
-      return;
-    }
-
-    const timestamp = updateTimestamp();
-
-    if (editingId) {
-      setAccounts((currentAccounts) =>
-        currentAccounts.map((account) =>
-          account.id === editingId
-            ? {
-                ...account,
-                name: form.name.trim(),
-                institution: form.institution.trim(),
-                balance: normalizedBalance,
-                type: form.type,
-                group: form.group,
-                updatedAt: timestamp,
-              }
-            : account,
-        ),
-      );
-    } else {
-      const newAccount: FinancialAccount = {
-        id: crypto.randomUUID(),
-        name: form.name.trim(),
-        institution: form.institution.trim(),
-        balance: normalizedBalance,
-        type: form.type,
-        group: form.group,
-        updatedAt: timestamp,
-      };
-
-      setAccounts((currentAccounts) => [
-        ...currentAccounts,
-        newAccount,
-      ]);
-
-      setSelectedGroup(form.group);
-    }
-
-    closeModal();
   };
 
   const deleteAccount = () => {
-    if (!editingId) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Delete this financial account?",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccounts((currentAccounts) =>
-      currentAccounts.filter((account) => account.id !== editingId),
-    );
-
-    updateTimestamp();
-    closeModal();
+    if (!editingId || !window.confirm("Delete this financial account?")) return;
+    setAccounts((current) => current.filter((item) => item.id !== editingId));
+    setIsModalOpen(false);
   };
 
-  const deleteAllData = () => {
-    const confirmed = window.confirm(
-      "Delete every financial account and restart from zero?",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccounts([]);
-    setSelectedGroup(null);
-    setLastUpdated("No data entered yet");
-
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(UPDATED_KEY);
-  };
-
-  const getGroupAccounts = (group: GroupKey) =>
-    accounts.filter((account) => account.group === group);
-
-  const getGroupTotal = (group: GroupKey) => {
-    const groupAccounts = getGroupAccounts(group);
-
-    return groupAccounts.reduce((total, account) => {
-      if (account.type === "asset") {
-        return total + account.balance;
-      }
-
-      return total - account.balance;
-    }, 0);
-  };
+  const insight = totalOutflow === 0
+    ? `No outflows are recorded for this ${selectedRange.label.toLowerCase()}. Your upcoming plan is still visible below.`
+    : cashMovement >= 0
+      ? `You kept ${formatCurrency(cashMovement)} more than you spent this ${selectedRange.label.toLowerCase()}. ${categoryTotals[0]?.[0] ?? "Your largest category"} was your largest spending area.`
+      : `Outflows exceeded inflows by ${formatCurrency(Math.abs(cashMovement))} this ${selectedRange.label.toLowerCase()}. ${categoryTotals[0]?.[0] ?? "Your largest category"} is the first place worth reviewing.`;
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#020713] text-white">
-      <div className="mx-auto max-w-7xl px-5 py-8 md:px-8">
-        <header className="flex items-center justify-between gap-6">
+    <main className="min-h-screen bg-[#071018] text-[#f4f7f5]">
+      <div className="mx-auto max-w-[1440px] px-5 py-6 md:px-9 md:py-9">
+        <header className="flex flex-col justify-between gap-5 border-b border-white/10 pb-7 md:flex-row md:items-end">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">
-              My Finance World
-            </p>
-
-            <h1 className="mt-3 text-2xl font-semibold md:text-3xl">
-              Good afternoon, Inder.
-            </h1>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Last updated: {lastUpdated}
-            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.26em] text-emerald-400">My Finance World</p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Good afternoon, Inder.</h1>
+            <p className="mt-2 text-sm text-slate-400">Here is the shape of your world today · {lastUpdated}</p>
           </div>
-
-          <button
-            onClick={() =>
-              openNewAccountForm(selectedGroup ?? "cash")
-            }
-            className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium transition hover:bg-white/10"
-          >
-            Add financial data
+          <button onClick={() => openAccountForm()} className="rounded-full bg-emerald-400 px-5 py-3 text-sm font-bold text-[#071018] transition hover:bg-emerald-300">
+            Update my numbers
           </button>
         </header>
 
-        <section className="relative mt-8 min-h-[700px] overflow-hidden rounded-[40px] border border-white/10 bg-[#061022] shadow-2xl">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.12),transparent_42%)]" />
-
-          <div className="absolute left-1/2 top-1/2 h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-emerald-400/10" />
-
-          <div className="absolute left-1/2 top-1/2 h-[340px] w-[340px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/5" />
-
-          {selectedGroup && (
-            <button
-              onClick={() => setSelectedGroup(null)}
-              className="absolute left-6 top-6 z-40 rounded-full border border-white/10 bg-black/30 px-4 py-2 text-sm text-slate-300 backdrop-blur hover:bg-white/10 hover:text-white"
-            >
-              ← Back to overview
+        <nav aria-label="Dashboard time range" className="mt-6 flex gap-2 overflow-x-auto pb-1">
+          {timeRanges.map((item) => (
+            <button key={item.key} onClick={() => setRange(item.key)} className={`whitespace-nowrap rounded-full px-4 py-2 text-sm transition ${range === item.key ? "bg-white text-slate-950" : "border border-white/10 text-slate-400 hover:border-white/25 hover:text-white"}`}>
+              {item.label}
             </button>
-          )}
+          ))}
+        </nav>
 
-          <svg
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-          >
-            <defs>
-              <filter id="lineGlow">
-                <feGaussianBlur stdDeviation="0.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
+        <section className="mt-6 grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
+          <article className="relative overflow-hidden rounded-[32px] border border-emerald-400/20 bg-[radial-gradient(circle_at_25%_20%,rgba(52,211,153,0.17),transparent_42%),#0b1821] p-7 md:p-9">
+            <p className="text-sm font-medium text-emerald-200">Your current net worth</p>
+            <p className="mt-3 text-5xl font-semibold tracking-[-0.06em] md:text-7xl">{formatCurrency(netWorth)}</p>
+            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">What you own, minus what you owe. This is your present position—not a score, and never a judgment.</p>
+            <div className="mt-9 grid grid-cols-2 gap-3 md:max-w-lg">
+              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                <p className="text-xs text-slate-500">Assets</p>
+                <p className="mt-1 text-lg font-semibold text-emerald-300">{formatCurrency(totalAssets)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                <p className="text-xs text-slate-500">Liabilities</p>
+                <p className="mt-1 text-lg font-semibold text-rose-300">{formatCurrency(totalLiabilities)}</p>
+              </div>
+            </div>
+          </article>
 
-            {!selectedGroup &&
-              groups.map((group) => {
-                const groupAccounts = getGroupAccounts(group.key);
+          <article className="rounded-[32px] border border-white/10 bg-[#0b1821] p-7">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-400">Cash movement</p>
+                <p className={`mt-2 text-3xl font-semibold ${cashMovement >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{cashMovement >= 0 ? "+" : "−"}{formatCurrency(Math.abs(cashMovement))}</p>
+              </div>
+              <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-slate-400">{selectedRange.label}</span>
+            </div>
+            <div className="mt-8 space-y-5">
+              <div>
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Money in</span><span className="text-emerald-300">{formatCurrency(totalInflow)}</span></div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, totalInflow / Math.max(totalInflow, totalOutflow, 1) * 100)}%` }} /></div>
+              </div>
+              <div>
+                <div className="flex justify-between text-sm"><span className="text-slate-400">Money out</span><span className="text-rose-300">{formatCurrency(totalOutflow)}</span></div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-rose-400" style={{ width: `${Math.min(100, totalOutflow / Math.max(totalInflow, totalOutflow, 1) * 100)}%` }} /></div>
+              </div>
+            </div>
+            <p className="mt-8 rounded-2xl bg-white/[0.04] p-4 text-sm leading-6 text-slate-300">{insight}</p>
+          </article>
+        </section>
 
-                if (groupAccounts.length === 0) {
-                  return null;
-                }
+        <section className="mt-5 grid gap-5 lg:grid-cols-2">
+          <FlowCard title="Top inflows" subtitle={`Largest additions this ${selectedRange.label.toLowerCase()}`} flows={topInflows} tone="green" />
+          <FlowCard title="Top outflows" subtitle={`Largest commitments this ${selectedRange.label.toLowerCase()}`} flows={topOutflows} tone="rose" />
+        </section>
 
-                const groupTotal = getGroupTotal(group.key);
-                const isAssetFlow = groupTotal >= 0;
-
-                return (
-                  <g key={group.key}>
-                    <line
-                      x1={group.x}
-                      y1={group.y}
-                      x2="50"
-                      y2="50"
-                      stroke={
-                        isAssetFlow ? "#34d399" : "#fb7185"
-                      }
-                      strokeOpacity="0.75"
-                      strokeWidth="0.35"
-                      strokeDasharray="1.2 1.2"
-                      filter="url(#lineGlow)"
-                    />
-
-                    <circle
-                      r="0.6"
-                      fill={
-                        isAssetFlow ? "#34d399" : "#fb7185"
-                      }
-                    >
-                      <animateMotion
-                        dur={isAssetFlow ? "4s" : "4.5s"}
-                        repeatCount="indefinite"
-                        path={
-                          isAssetFlow
-                            ? `M ${group.x} ${group.y} L 50 50`
-                            : `M 50 50 L ${group.x} ${group.y}`
-                        }
-                      />
-                    </circle>
-                  </g>
-                );
-              })}
-
-            {selectedGroup &&
-              selectedGroupAccounts
-                .slice(0, accountPositions.length)
-                .map((account, index) => {
-                  const position = accountPositions[index];
-
-                  return (
-                    <g key={account.id}>
-                      <line
-                        x1={position.x}
-                        y1={position.y}
-                        x2="50"
-                        y2="50"
-                        stroke={
-                          account.type === "asset"
-                            ? "#34d399"
-                            : "#fb7185"
-                        }
-                        strokeOpacity="0.75"
-                        strokeWidth="0.35"
-                        strokeDasharray="1.2 1.2"
-                        filter="url(#lineGlow)"
-                      />
-
-                      <circle
-                        r="0.6"
-                        fill={
-                          account.type === "asset"
-                            ? "#34d399"
-                            : "#fb7185"
-                        }
-                      >
-                        <animateMotion
-                          dur={`${3.5 + index * 0.35}s`}
-                          repeatCount="indefinite"
-                          path={
-                            account.type === "asset"
-                              ? `M ${position.x} ${position.y} L 50 50`
-                              : `M 50 50 L ${position.x} ${position.y}`
-                          }
-                        />
-                      </circle>
-                    </g>
-                  );
-                })}
-          </svg>
-
-          <div className="absolute left-1/2 top-1/2 z-20 flex h-64 w-64 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-400/10 text-center shadow-[0_0_90px_rgba(16,185,129,0.22)] backdrop-blur-xl">
-            <div className="absolute inset-3 rounded-full border border-white/5" />
-
-            <p className="relative text-sm text-emerald-200">
-              {selectedGroupDefinition
-                ? selectedGroupDefinition.name
-                : "Your net worth"}
-            </p>
-
-            <p className="relative mt-3 text-4xl font-semibold tracking-tight md:text-5xl">
-              {selectedGroup
-                ? formatCurrency(
-                    getGroupTotal(selectedGroup),
-                  )
-                : formatCurrency(netWorth)}
-            </p>
-
-            <p
-              className={`relative mt-3 text-sm font-medium ${
-                selectedGroup
-                  ? getGroupTotal(selectedGroup) >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-                  : netWorth >= 0
-                    ? "text-emerald-400"
-                    : "text-rose-400"
-              }`}
-            >
-              {selectedGroup
-                ? `${selectedGroupAccounts.length} account${
-                    selectedGroupAccounts.length === 1 ? "" : "s"
-                  }`
-                : accounts.length === 0
-                  ? "Click a floating ball to begin"
-                  : netWorth >= 0
-                    ? "Assets exceed liabilities"
-                    : "Liabilities exceed assets"}
-            </p>
-          </div>
-
-          {!selectedGroup &&
-            groups.map((group, index) => {
-              const groupAccounts = getGroupAccounts(group.key);
-              const groupTotal = getGroupTotal(group.key);
-              const isEmpty = groupAccounts.length === 0;
-              const isPositive = groupTotal >= 0;
-
-              return (
-                <button
-                  key={group.key}
-                  onClick={() => handleGroupClick(group)}
-                  style={{
-                    left: `${group.x}%`,
-                    top: `${group.y}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                  className={`absolute z-20 flex h-36 w-36 flex-col items-center justify-center rounded-full border text-center backdrop-blur-xl transition duration-300 hover:scale-110 md:h-40 md:w-40 ${
-                    isEmpty
-                      ? "border-dashed border-slate-500/40 bg-white/[0.03]"
-                      : isPositive
-                        ? "border-emerald-400/35 bg-emerald-400/10 shadow-[0_0_35px_rgba(16,185,129,0.13)]"
-                        : "border-rose-400/35 bg-rose-400/10 shadow-[0_0_35px_rgba(244,63,94,0.13)]"
-                  } ${
-                    index % 2 === 0
-                      ? "animate-[float_5s_ease-in-out_infinite]"
-                      : "animate-[float_6s_ease-in-out_infinite_reverse]"
-                  }`}
-                >
-                  <span
-                    className={`text-xs font-medium ${
-                      isEmpty
-                        ? "text-slate-500"
-                        : isPositive
-                          ? "text-emerald-300"
-                          : "text-rose-300"
-                    }`}
-                  >
-                    {groupAccounts.length === 0
-                      ? "Click to add"
-                      : `${groupAccounts.length} account${
-                          groupAccounts.length === 1 ? "" : "s"
-                        }`}
-                  </span>
-
-                  <span className="mt-2 font-semibold">
-                    {group.name}
-                  </span>
-
-                  <span className="mt-1 max-w-[110px] text-xs text-slate-400">
-                    {isEmpty
-                      ? group.description
-                      : formatCurrency(groupTotal)}
-                  </span>
+        <section className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+          <article className="rounded-[28px] border border-white/10 bg-[#0b1821] p-6 md:p-7">
+            <div className="flex items-end justify-between gap-4">
+              <div><h2 className="text-xl font-semibold">Spending by category</h2><p className="mt-1 text-sm text-slate-500">Select a category to see what shaped it</p></div>
+              <p className="text-sm text-slate-400">{formatCurrency(totalOutflow)} total</p>
+            </div>
+            <div className="mt-7 space-y-3">
+              {categoryTotals.length ? categoryTotals.map(([category, amount]) => (
+                <button key={category} onClick={() => setSelectedCategory(selectedCategory === category ? null : category)} className="group w-full rounded-2xl border border-transparent p-3 text-left transition hover:border-white/10 hover:bg-white/[0.03]">
+                  <div className="flex items-center justify-between text-sm"><span>{category}</span><span className="text-slate-300">{formatCurrency(amount)}</span></div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: `${amount / maxCategory * 100}%` }} /></div>
+                  {selectedCategory === category && <div className="mt-4 space-y-2 border-t border-white/10 pt-3">{outflows.filter((item) => item.category === category).map((item) => <div key={item.id} className="flex justify-between text-xs text-slate-400"><span>{item.label}</span><span>{formatExactCurrency(item.amount)}</span></div>)}</div>}
                 </button>
-              );
+              )) : <EmptyState text="No spending in this range" />}
+            </div>
+          </article>
+
+          <article className="rounded-[28px] border border-white/10 bg-[#0b1821] p-6 md:p-7">
+            <h2 className="text-xl font-semibold">Coming up</h2>
+            <p className="mt-1 text-sm text-slate-500">Expected over the next few weeks</p>
+            <div className="mt-6 space-y-3">
+              {expectedCashFlows.map((item) => (
+                <div key={item.id} className="flex items-center gap-4 rounded-2xl bg-white/[0.035] p-4">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${item.direction === "inflow" ? "bg-emerald-400/10 text-emerald-300" : "bg-rose-400/10 text-rose-300"}`}>{item.direction === "inflow" ? "↓" : "↑"}</div>
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.label}</p><p className="mt-1 text-xs text-slate-500">In {item.dueInDays} days</p></div>
+                  <p className={`text-sm font-semibold ${item.direction === "inflow" ? "text-emerald-300" : "text-rose-300"}`}>{item.direction === "inflow" ? "+" : "−"}{formatCurrency(item.amount)}</p>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+
+        <section className="mt-5 rounded-[28px] border border-violet-400/20 bg-[linear-gradient(135deg,rgba(139,92,246,0.12),rgba(11,24,33,1)_55%)] p-6 md:flex md:items-center md:justify-between md:p-8">
+          <div className="max-w-3xl">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-violet-300">Your contextual summary</p>
+            <h2 className="mt-3 text-2xl font-semibold">Your position is stable, with one near-term commitment to watch.</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">You have {formatCurrency(totalAssets - totalLiabilities)} in net worth and {formatCurrency(getGroupTotal(accounts, "cash"))} in cash. Your next salary arrives before the mortgage payment, leaving an expected buffer of {formatCurrency(expectedCashFlows[0].amount - expectedCashFlows[1].amount)} between those two events.</p>
+          </div>
+          <div className="mt-5 rounded-2xl border border-violet-300/15 bg-black/15 px-5 py-4 text-sm text-violet-200 md:ml-8 md:mt-0 md:max-w-xs">“Show me what changed” and richer questions can come next. For now, this summary is calculated locally from your snapshot.</div>
+        </section>
+
+        <section className="mt-10">
+          <div className="flex items-end justify-between"><div><h2 className="text-xl font-semibold">Your worlds</h2><p className="mt-1 text-sm text-slate-500">Open a world to manage its balances. Detailed activity stays out of the way until you choose to drill in.</p></div></div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {groups.map((group) => {
+              const groupAccounts = getGroupAccounts(accounts, group.key);
+              const isOpen = selectedGroup === group.key;
+              return <article key={group.key} className={`rounded-3xl border p-5 transition ${isOpen ? "border-emerald-400/40 bg-emerald-400/[0.07]" : "border-white/10 bg-[#0b1821]"}`}>
+                <button onClick={() => setSelectedGroup(isOpen ? null : group.key)} className="w-full text-left">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-lg text-emerald-300">{groupIcons[group.key]}</span>
+                  <p className="mt-5 font-semibold">{group.name}</p><p className="mt-1 text-xl font-semibold">{formatCurrency(getGroupTotal(accounts, group.key))}</p><p className="mt-2 text-xs text-slate-500">{groupAccounts.length} balance{groupAccounts.length === 1 ? "" : "s"} · {isOpen ? "Close" : "Open world"}</p>
+                </button>
+                {isOpen && <div className="mt-4 space-y-2 border-t border-white/10 pt-4">{groupAccounts.map((account) => <button key={account.id} onClick={() => openAccountForm(group.key, account)} className="flex w-full justify-between gap-3 rounded-xl p-2 text-left text-xs hover:bg-white/5"><span className="truncate text-slate-400">{account.name}</span><span>{formatCurrency(account.type === "asset" ? account.balance : -account.balance)}</span></button>)}<button onClick={() => openAccountForm(group.key)} className="mt-2 text-xs font-semibold text-emerald-300">+ Add a balance</button></div>}
+              </article>;
             })}
-
-          {selectedGroup &&
-            selectedGroupAccounts
-              .slice(0, accountPositions.length)
-              .map((account, index) => {
-                const position = accountPositions[index];
-
-                return (
-                  <button
-                    key={account.id}
-                    onClick={() => openEditForm(account)}
-                    style={{
-                      left: `${position.x}%`,
-                      top: `${position.y}%`,
-                      transform: "translate(-50%, -50%)",
-                    }}
-                    className={`absolute z-20 flex h-36 w-36 flex-col items-center justify-center rounded-full border text-center backdrop-blur-xl transition duration-300 hover:scale-110 md:h-40 md:w-40 ${
-                      account.type === "asset"
-                        ? "border-emerald-400/35 bg-emerald-400/10 shadow-[0_0_35px_rgba(16,185,129,0.13)]"
-                        : "border-rose-400/35 bg-rose-400/10 shadow-[0_0_35px_rgba(244,63,94,0.13)]"
-                    } ${
-                      index % 2 === 0
-                        ? "animate-[float_5s_ease-in-out_infinite]"
-                        : "animate-[float_6s_ease-in-out_infinite_reverse]"
-                    }`}
-                  >
-                    <span
-                      className={`text-xs font-medium ${
-                        account.type === "asset"
-                          ? "text-emerald-300"
-                          : "text-rose-300"
-                      }`}
-                    >
-                      {account.institution ||
-                        (account.type === "asset"
-                          ? "Asset"
-                          : "Liability")}
-                    </span>
-
-                    <span className="mt-2 max-w-[125px] font-semibold">
-                      {account.name}
-                    </span>
-
-                    <span className="mt-1 text-sm text-slate-300">
-                      {formatCurrency(account.balance)}
-                    </span>
-                  </button>
-                );
-              })}
-
-          {selectedGroup && (
-            <button
-              onClick={() => openNewAccountForm(selectedGroup)}
-              className="absolute bottom-7 right-7 z-30 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-emerald-400/50 bg-emerald-400/10 text-4xl font-light text-emerald-300 transition hover:scale-110 hover:bg-emerald-400/20"
-              aria-label="Add another account"
-            >
-              +
-            </button>
-          )}
-
-          <div className="absolute bottom-5 left-1/2 z-30 flex -translate-x-1/2 gap-6 rounded-full border border-white/10 bg-black/30 px-6 py-3 text-xs backdrop-blur">
-            <span className="flex items-center gap-2 text-slate-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              Assets flow in
-            </span>
-
-            <span className="flex items-center gap-2 text-slate-300">
-              <span className="h-2 w-2 rounded-full bg-rose-400" />
-              Liabilities flow out
-            </span>
           </div>
         </section>
-
-        <section className="mt-6 grid gap-6 md:grid-cols-3">
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-sm text-slate-400">Total assets</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-300">
-              {formatExactCurrency(totalAssets)}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-sm text-slate-400">
-              Total liabilities
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-rose-300">
-              {formatExactCurrency(totalLiabilities)}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6">
-            <p className="text-sm text-slate-400">Net worth</p>
-            <p
-              className={`mt-2 text-2xl font-semibold ${
-                netWorth >= 0
-                  ? "text-emerald-300"
-                  : "text-rose-300"
-              }`}
-            >
-              {formatExactCurrency(netWorth)}
-            </p>
-          </div>
-        </section>
-
-        {accounts.length > 0 && (
-          <div className="mt-6 text-right">
-            <button
-              onClick={deleteAllData}
-              className="text-sm text-slate-600 hover:text-rose-400"
-            >
-              Delete all financial data
-            </button>
-          </div>
-        )}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#081225] p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm text-emerald-400">
-                  Financial account
-                </p>
-
-                <h2 className="mt-1 text-2xl font-semibold">
-                  {editingId
-                    ? "Update account"
-                    : "Add financial data"}
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-400">
-                  Enter the latest accurate balance.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-full bg-white/5 px-3 py-2 text-sm text-slate-400 hover:bg-white/10 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-              <div>
-                <label
-                  htmlFor="group"
-                  className="text-sm text-slate-300"
-                >
-                  Category
-                </label>
-
-                <select
-                  id="group"
-                  value={form.group}
-                  onChange={(event) => {
-                    const nextGroup = event.target.value as GroupKey;
-                    const groupDefinition = groups.find(
-                      (group) => group.key === nextGroup,
-                    );
-
-                    setForm((current) => ({
-                      ...current,
-                      group: nextGroup,
-                      type:
-                        nextGroup === "other"
-                          ? current.type
-                          : groupDefinition?.defaultType ??
-                            current.type,
-                    }));
-                  }}
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-[#050b17] px-4 py-3 outline-none focus:border-emerald-400"
-                >
-                  {groups.map((group) => (
-                    <option key={group.key} value={group.key}>
-                      {group.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm text-slate-300">
-                  Balance type
-                </label>
-
-                <div className="mt-2 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        type: "asset",
-                      }))
-                    }
-                    className={`rounded-xl border px-4 py-3 text-sm font-medium ${
-                      form.type === "asset"
-                        ? "border-emerald-400 bg-emerald-400/10 text-emerald-300"
-                        : "border-white/10 bg-white/5 text-slate-400"
-                    }`}
-                  >
-                    Asset
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setForm((current) => ({
-                        ...current,
-                        type: "liability",
-                      }))
-                    }
-                    className={`rounded-xl border px-4 py-3 text-sm font-medium ${
-                      form.type === "liability"
-                        ? "border-rose-400 bg-rose-400/10 text-rose-300"
-                        : "border-white/10 bg-white/5 text-slate-400"
-                    }`}
-                  >
-                    Liability
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="account-name"
-                  className="text-sm text-slate-300"
-                >
-                  Account name
-                </label>
-
-                <input
-                  id="account-name"
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  placeholder="Example: TD Chequing"
-                  required
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 outline-none placeholder:text-slate-600 focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="institution"
-                  className="text-sm text-slate-300"
-                >
-                  Institution or provider
-                </label>
-
-                <input
-                  id="institution"
-                  value={form.institution}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      institution: event.target.value,
-                    }))
-                  }
-                  placeholder="Example: TD Bank"
-                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 outline-none placeholder:text-slate-600 focus:border-emerald-400"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="account-balance"
-                  className="text-sm text-slate-300"
-                >
-                  Current balance
-                </label>
-
-                <div className="relative mt-2">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                    $
-                  </span>
-
-                  <input
-                    id="account-balance"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.balance}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        balance: event.target.value,
-                      }))
-                    }
-                    placeholder="0.00"
-                    required
-                    className="w-full rounded-xl border border-white/10 bg-black/20 py-3 pl-8 pr-4 outline-none placeholder:text-slate-600 focus:border-emerald-400"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300"
-              >
-                {editingId ? "Save changes" : "Add account"}
-              </button>
-
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={deleteAccount}
-                  className="w-full rounded-xl border border-rose-400/20 px-5 py-3 text-sm text-rose-300 transition hover:bg-rose-400/10"
-                >
-                  Delete account
-                </button>
-              )}
-            </form>
-          </div>
-        </div>
-      )}
-
-      <style jsx global>{`
-        @keyframes float {
-          0%,
-          100% {
-            margin-top: 0;
-          }
-
-          50% {
-            margin-top: -12px;
-          }
-        }
-      `}</style>
+      {isModalOpen && <AccountModal form={form} setForm={setForm} editingId={editingId} onClose={() => setIsModalOpen(false)} onSave={saveAccount} onDelete={deleteAccount} />}
     </main>
   );
+}
+
+function FlowCard({ title, subtitle, flows, tone }: { title: string; subtitle: string; flows: CashFlow[]; tone: "green" | "rose" }) {
+  return <article className="rounded-[28px] border border-white/10 bg-[#0b1821] p-6 md:p-7"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-1 text-sm text-slate-500">{subtitle}</p><div className="mt-6 space-y-3">{flows.length ? flows.map((item, index) => <div key={item.id} className="flex items-center gap-4 rounded-2xl bg-white/[0.035] p-4"><span className="text-sm font-semibold text-slate-600">0{index + 1}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{item.label}</p><p className="mt-1 text-xs text-slate-500">{item.category}</p></div><p className={`text-sm font-semibold ${tone === "green" ? "text-emerald-300" : "text-rose-300"}`}>{tone === "green" ? "+" : "−"}{formatCurrency(item.amount)}</p></div>) : <EmptyState text="Nothing recorded in this range" />}</div></article>;
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-500">{text}</div>;
+}
+
+function AccountModal({ form, setForm, editingId, onClose, onSave, onDelete }: { form: AccountForm; setForm: React.Dispatch<React.SetStateAction<AccountForm>>; editingId: string | null; onClose: () => void; onSave: (event: FormEvent<HTMLFormElement>) => void; onDelete: () => void }) {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm"><div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/10 bg-[#0b1821] p-6 shadow-2xl"><div className="flex justify-between gap-4"><div><p className="text-sm text-emerald-400">Manual financial snapshot</p><h2 className="mt-1 text-2xl font-semibold">{editingId ? "Update balance" : "Add a balance"}</h2></div><button onClick={onClose} className="text-sm text-slate-400 hover:text-white">Close</button></div><form onSubmit={onSave} className="mt-6 space-y-4">
+    <label className="block text-sm text-slate-300">World<select value={form.group} onChange={(event) => { const group = event.target.value as GroupKey; setForm((current) => ({ ...current, group, type: groups.find((item) => item.key === group)?.defaultType ?? current.type })); }} className="mt-2 w-full rounded-xl border border-white/10 bg-[#071018] px-4 py-3">{groups.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
+    <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setForm((current) => ({ ...current, type: "asset" }))} className={`rounded-xl border p-3 text-sm ${form.type === "asset" ? "border-emerald-400 text-emerald-300" : "border-white/10 text-slate-500"}`}>Asset</button><button type="button" onClick={() => setForm((current) => ({ ...current, type: "liability" }))} className={`rounded-xl border p-3 text-sm ${form.type === "liability" ? "border-rose-400 text-rose-300" : "border-white/10 text-slate-500"}`}>Liability</button></div>
+    <label className="block text-sm text-slate-300">Name<input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Everyday chequing" className="mt-2 w-full rounded-xl border border-white/10 bg-[#071018] px-4 py-3 outline-none focus:border-emerald-400" /></label>
+    <label className="block text-sm text-slate-300">Institution or note<input value={form.institution} onChange={(event) => setForm((current) => ({ ...current, institution: event.target.value }))} placeholder="TD Bank" className="mt-2 w-full rounded-xl border border-white/10 bg-[#071018] px-4 py-3 outline-none focus:border-emerald-400" /></label>
+    <label className="block text-sm text-slate-300">Current balance<input required min="0" step="0.01" type="number" value={form.balance} onChange={(event) => setForm((current) => ({ ...current, balance: event.target.value }))} placeholder="0.00" className="mt-2 w-full rounded-xl border border-white/10 bg-[#071018] px-4 py-3 outline-none focus:border-emerald-400" /></label>
+    <button type="submit" className="w-full rounded-xl bg-emerald-400 px-5 py-3 font-bold text-slate-950">Save balance</button>{editingId && <button type="button" onClick={onDelete} className="w-full rounded-xl border border-rose-400/20 px-5 py-3 text-sm text-rose-300">Delete balance</button>}
+  </form></div></div>;
 }
