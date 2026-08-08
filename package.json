@@ -2,11 +2,16 @@
   "name": "my-finance-world",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test tests/transactions.test.ts"
   },
   "dependencies": {
     "next": "16.2.10",

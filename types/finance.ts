@@ -82,6 +82,7 @@ export type CanonicalFinancialModel = CanonicalFinancialSnapshot & {
   summary: NetWorthSummary | null;
   accountsByWorld: Readonly<Record<MoneyWorldKey, readonly FinancialAccount[]>>;
   totalsByWorld: Readonly<Record<MoneyWorldKey, number | null>>;
+  transactions: import("./transactions").CanonicalTransactionLedger;
 };
 
 export type RawFinancialSnapshot = {

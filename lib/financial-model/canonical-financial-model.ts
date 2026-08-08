@@ -7,6 +7,7 @@ import type {
   NetWorthSummary,
   RawFinancialSnapshot,
 } from "@/types/finance";
+import { emptyTransactionLedger } from "@/lib/transactions/ingestion";
 
 const ACCOUNT_TYPES = new Set(["asset", "liability"]);
 const ACCOUNT_GROUPS = new Set<LegacyAccountGroup>([
@@ -147,6 +148,7 @@ const assembleModel = (
     summary: status === "loaded" ? computeNetWorthSummary(snapshot.money.accounts) : null,
     accountsByWorld,
     totalsByWorld,
+    transactions: emptyTransactionLedger(),
   };
 };
 
