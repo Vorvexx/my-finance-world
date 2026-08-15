@@ -104,6 +104,7 @@ export type HomepageRealWorldObject = {
   asset: { name: string; value: HomepageMoney; effectiveDate: string; sourceLabel: string } | null;
   financing: { displayName: string; institution: string; balance: HomepageMoney; effectiveDate: string } | null;
   equity: HomepageMoney;
+  categories: readonly HomepageLifestyleCategory[];
 };
 
 export type HomepageViewModel = {
@@ -126,6 +127,8 @@ export type HomepageViewModel = {
     topCategories: readonly HomepageCategoryTotal[];
     categories: readonly HomepageLifestyleCategory[];
     unclassifiedCount: number;
+    actionableReviewCount: number;
+    reviewedLaterCount: number;
     message: string | null;
     understanding: { status: "known"; percentage: number; understoodAmount: number; totalAmount: number } | { status: "unknown"; reason: string };
   };

@@ -234,13 +234,28 @@ test("Lifestyle categories reconcile to eligible visible transactions", () => {
   assert.deepEqual(descriptions.sort(), ["Approved description 1", "Approved description 2", "Approved description 3", "Approved description 6"]);
 });
 
+test("Review Later is disclosed separately and Home and Vehicle categories remain traceable", () => {
+  const deferred = transaction({ index: 1, meaning: "credit-card-purchase", amount: 25 });
+  const home = { ...transaction({ index: 2, meaning: "expense", amount: 80, category: "Utilities" }), attribution: { ...transaction({ index: 2, meaning: "expense", amount: 80, category: "Utilities" }).attribution, world: "home" as const } };
+  const vehicle = { ...transaction({ index: 3, meaning: "expense", amount: 60, category: "Fuel" }), attribution: { ...transaction({ index: 3, meaning: "expense", amount: 60, category: "Fuel" }).attribution, world: "vehicle" as const } };
+  const view = deriveHomepageView({ model, transactions: [deferred, home, vehicle], statementFacts: [], asOfDate: "2099-08-08", deferredReviewTransactionIds: new Set([deferred.id]) });
+  assert.equal(view.lifestyle.unclassifiedCount, 1);
+  assert.equal(view.lifestyle.reviewedLaterCount, 1);
+  assert.equal(view.lifestyle.actionableReviewCount, 0);
+  assert.equal(view.lifestyle.categories[0].label, "Review Later");
+  assert.deepEqual(view.home.categories.map(({ label, total }) => ({ label, total })), [{ label: "Utilities", total: 80 }]);
+  assert.deepEqual(view.vehicle.categories.map(({ label, total }) => ({ label, total })), [{ label: "Fuel", total: 60 }]);
+});
+
 test("bank fees remain Cashflow activity but never inflate Lifestyle", () => {
   const transactions = [
     transaction({ index: 1, meaning: "fee", amount: 15, category: "Banking Fees" }),
     transaction({ index: 2, meaning: "expense", amount: 40, category: "Dining" }),
+    transaction({ index: 3, meaning: "refund", amount: 15, direction: "inflow", category: "Banking Fees" }),
   ];
   const view = deriveHomepageView({ model, transactions, statementFacts: [], asOfDate: "2099-08-08" });
   assert.deepEqual(view.cashflow.moneyOut, { status: "known", amount: 55 });
+  assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 15 });
   assert.deepEqual(view.lifestyle.qualifyingSpending, { status: "known", amount: 40 });
   assert.equal(view.lifestyle.categories.some((category) => category.label === "Banking Fees"), false);
 });

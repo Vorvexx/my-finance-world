@@ -26,6 +26,10 @@ export const loadHomepageView = async ({ asOfDate, periodKey }: { asOfDate?: str
   const corrections = relationshipReadModel
     ? withReviewRuntime(({ service }) => service.correctionsForTransactions(relationshipReadModel.transactions)) ?? new Map()
     : new Map();
+  const deferredReviewTransactionIds = withReviewRuntime(({ store }) => new Set(store.listReviewItems("ignored").flatMap((item) => {
+    const decision = store.reviewDecision(item.id);
+    return decision?.kind === "ignore" && decision.deferred ? [item.transactionId] : [];
+  }))) ?? new Set<string>();
   return deriveHomepageView({
     model,
     transactions: relationshipReadModel?.transactions ?? null,
@@ -36,5 +40,6 @@ export const loadHomepageView = async ({ asOfDate, periodKey }: { asOfDate?: str
     periodKey,
     suppressedActivityTransactionIds: relationshipReadModel?.suppressedActivityTransactionIds,
     corrections,
+    deferredReviewTransactionIds,
   });
 };

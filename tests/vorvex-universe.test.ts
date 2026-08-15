@@ -23,7 +23,7 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
     assert.equal(component.includes(`label: "${world}"`), true, world);
   for (const phrase of [
     "SpatialChild", "accountChildren", "CashflowChildDetail", "selectedCashflow", "Money In", "Money Out", "Recent", "Upcoming",
-    "Nothing known yet", "LifestyleDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
+    "Nothing known yet", "CategoryDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
     "Property value", "Vehicle financing", "Add factual information", "Net worth", "journey-trail",
     "child-object", "WorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
     "Obligations", "Cashflow", "Contribution portions are context only and are never added",
@@ -62,7 +62,7 @@ test("information surfaces close independently from spatial navigation", async (
   assert.match(component, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
-  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
+  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
   assert.match(component, /onClick=\{isParent \? leaveObject : \(\) => selectWorld\(world\.key\)\}/);
   assert.match(component, /aria-label=\{isParent \? `Return to \$\{world\.label\}` : undefined\}/);
 });

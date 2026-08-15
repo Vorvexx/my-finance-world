@@ -17,6 +17,7 @@ export type HomepageFinancialSources = {
   suppressedActivityTransactionIds?: ReadonlySet<string>;
   periodKey?: FinancialPeriodKey;
   corrections?: ReadonlyMap<string, { actionToken: string; suggestions: import("../../types/review-interface.ts").BrowserReviewSuggestion[] }>;
+  deferredReviewTransactionIds?: ReadonlySet<string>;
 };
 
 const SPENDING = new Set<FinancialMeaning>(["expense", "fee", "interest", "credit-card-purchase"]);
@@ -24,9 +25,11 @@ const PAYMENT = new Set<FinancialMeaning>(["credit-card-payment"]);
 const TRANSFER = new Set<FinancialMeaning>(["transfer"]);
 const CASH_MOVEMENT = new Set<FinancialMeaning>(["cash-withdrawal", "cash-deposit"]);
 const NON_LIFESTYLE_WORLDS = new Set(["home", "vehicle", "investments", "creditDebt"]);
+const isBankingFeeCategory = (category: string | null) => category !== null && /^(?:bank|banking) fees$/i.test(category.trim());
 const affectsLifestyle = (transaction: CanonicalTransaction) =>
   (SPENDING.has(transaction.financialMeaning) || transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal")
   && transaction.financialMeaning !== "fee" && transaction.financialMeaning !== "interest"
+  && !isBankingFeeCategory(transaction.attribution.category)
   && !NON_LIFESTYLE_WORLDS.has(transaction.attribution.world ?? "");
 const cents = (value: number) => Math.round(value * 100);
 const money = (value: number): HomepageMoney => ({ status: "known", amount: value });
@@ -118,6 +121,7 @@ export const deriveHomepageView = ({
   suppressedActivityTransactionIds = new Set<string>(),
   periodKey = "month",
   corrections = new Map(),
+  deferredReviewTransactionIds = new Set<string>(),
 }: HomepageFinancialSources): HomepageViewModel => {
   const selectedPeriod = financialPeriod(periodKey);
   const startDate = addDays(asOfDate, -(selectedPeriod.days - 1));
@@ -164,7 +168,7 @@ export const deriveHomepageView = ({
   const lifestyleGroups = new Map<string, CanonicalTransaction[]>();
   for (const transaction of visiblePeriodTransactions) {
     if (!affectsLifestyle(transaction)) continue;
-    const label = transaction.attribution.category ?? "Needs Review";
+    const label = transaction.attribution.category ?? (deferredReviewTransactionIds.has(transaction.id) ? "Review Later" : "Needs Review");
     lifestyleGroups.set(label, [...(lifestyleGroups.get(label) ?? []), transaction]);
   }
   const lifestyleCategories = [...lifestyleGroups.entries()].map(([label, grouped]) => {
@@ -192,10 +196,34 @@ export const deriveHomepageView = ({
           correction: corrections.get(transaction.id) ?? null,
         })),
     }));
+  const worldCategories = (world: "home" | "vehicle") => {
+    const grouped = new Map<string, CanonicalTransaction[]>();
+    for (const transaction of visiblePeriodTransactions) {
+      if (transaction.attribution.world !== world || !transaction.attribution.category) continue;
+      grouped.set(transaction.attribution.category, [...(grouped.get(transaction.attribution.category) ?? []), transaction]);
+    }
+    return [...grouped.entries()].map(([label, transactions], categoryIndex) => ({
+      viewKey: `${world}-${categoryIndex + 1}`,
+      label,
+      total: fromCents(transactions.reduce((sum, transaction) => sum + (SPENDING.has(transaction.financialMeaning) ? 1 : -1) * cents(transaction.amount), 0)),
+      relativeShare: null,
+      needsReview: false,
+      transactions: [...transactions].sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).map((transaction, transactionIndex) => ({
+        viewKey: `${world}-${categoryIndex + 1}-${transactionIndex + 1}`,
+        date: transaction.transactionDate, description: transaction.rawDescription,
+        accountName: model.money.accounts.find((account) => account.id === transaction.accountId)?.name ?? "Unknown account",
+        amount: transaction.amount, spendingImpact: SPENDING.has(transaction.financialMeaning) ? transaction.amount : -transaction.amount,
+        category: transaction.attribution.category, needsReview: false, correction: corrections.get(transaction.id) ?? null,
+      })),
+    })).sort((left, right) => right.total - left.total || left.label.localeCompare(right.label));
+  };
   const unclassifiedCount = visiblePeriodTransactions.filter((transaction) =>
     (SPENDING.has(transaction.financialMeaning) || transaction.financialMeaning === "unknown")
     && transaction.attribution.category === null,
   ).length;
+  const reviewedLaterCount = visiblePeriodTransactions.filter((transaction) => deferredReviewTransactionIds.has(transaction.id)
+    && (SPENDING.has(transaction.financialMeaning) || transaction.financialMeaning === "unknown") && transaction.attribution.category === null).length;
+  const actionableReviewCount = Math.max(0, unclassifiedCount - reviewedLaterCount);
   const accountNames = new Map(model.money.accounts.map((account) => [account.id, account.name]));
   const activityView = (transaction: CanonicalTransaction, viewKey: string, direction = transaction.direction): HomepageActivity => ({
     viewKey, date: transaction.transactionDate, description: transaction.rawDescription, amount: transaction.amount,
@@ -371,6 +399,7 @@ export const deriveHomepageView = ({
       asset: homeAsset ? { name: homeAsset.name, value: money(homeAsset.balance), effectiveDate: homeAsset.updatedAt, sourceLabel: "Founder-provided factual entry" } : null,
       financing: mortgage ? { displayName: mortgage.name, institution: mortgage.institution, balance: money(mortgage.balance), effectiveDate: mortgage.updatedAt } : null,
       equity: homeAsset && mortgage ? money(fromCents(cents(homeAsset.balance) - cents(mortgage.balance))) : unknown("Property value and mortgage balance are both required."),
+      categories: worldCategories("home"),
     },
     vehicle: {
       status: vehicleAsset || vehicleLoan ? vehicleAsset && vehicleLoan ? "known" : "partial" : "unknown",
@@ -378,6 +407,7 @@ export const deriveHomepageView = ({
       asset: vehicleAsset ? { name: vehicleAsset.name, value: money(vehicleAsset.balance), effectiveDate: vehicleAsset.updatedAt, sourceLabel: "Founder-provided factual entry" } : null,
       financing: vehicleLoan ? { displayName: vehicleLoan.name, institution: vehicleLoan.institution, balance: money(vehicleLoan.balance), effectiveDate: vehicleLoan.updatedAt } : null,
       equity: vehicleAsset && vehicleLoan ? money(fromCents(cents(vehicleAsset.balance) - cents(vehicleLoan.balance))) : unknown("Vehicle value and financing balance are both required."),
+      categories: worldCategories("vehicle"),
     },
     lifestyle: {
       qualifyingSpending: periodHasEvidence
@@ -386,6 +416,8 @@ export const deriveHomepageView = ({
       topCategories,
       categories: lifestyleCategories,
       unclassifiedCount,
+      actionableReviewCount,
+      reviewedLaterCount,
       message: unclassifiedCount > 0 ? "Some transactions still need classification." : null,
       understanding: spendingCents > 0
         ? { status: "known", percentage: Math.round(understoodSpendingCents / spendingCents * 100), understoodAmount: fromCents(understoodSpendingCents), totalAmount: fromCents(spendingCents) }
