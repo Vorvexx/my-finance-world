@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { HomepageAccount, HomepageActivity, HomepageLifestyleCategory, HomepageMoney, HomepageViewModel } from "@/types/homepage";
 import { FINANCIAL_PERIODS } from "@/lib/homepage/financial-period";
 import WebglAurora from "@/components/webgl-aurora";
@@ -48,32 +48,32 @@ function WorldDetail({ world, view }: { world: WorldKey; view: HomepageViewModel
     const moneyOut = view.cash.accounts.reduce((sum, account) => sum + account.activity.moneyOut, 0);
     return <>
       <p className="world-kicker">Cash</p>
-      <h2>Cash activity</h2>
+      <h2>Cash</h2>
       <div className="pnn-grid"><section><p>Past</p><ActivityList title="Recent movements" items={recent} currency={currency} empty="No recent Cash activity is available." /></section><section><p>Now</p><strong>{formatMoney(moneyIn, currency)} entered</strong><small>{formatMoney(moneyOut, currency)} left across {view.cash.accountCount} account{view.cash.accountCount === 1 ? "" : "s"} this {view.period.label.toLowerCase()}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}{upcoming.length === 0 && <small>Nothing known or strongly expected yet.</small>}</section></div>
     </>;
   }
   if (world === "investments") return <>
     <p className="world-kicker">Investments</p>
-    <h2>Recorded investment activity</h2>
+    <h2>Investments</h2>
     <div className="pnn-grid"><section><p>Past</p>{view.investments.accounts.flatMap((account) => account.investmentHistory?.snapshots.slice(-1) ?? []).slice(0, 3).map((snapshot) => <span key={snapshot.date}><strong>Recorded account value</strong><small>{snapshot.date} · {formatMoney(snapshot.value, currency)}</small></span>)}</section><section><p>Now</p><strong>{view.investments.change.status === "known" ? `${view.investments.change.amount > 0 ? "+" : ""}${formatMoney(view.investments.change.amount, currency)} recorded value movement` : "Comparable movement unavailable"}</strong><small>{view.investments.changeMessage}</small></section><section><p>Next</p><small>Contributions and future performance remain Unknown unless canonical transaction or statement evidence supports them.</small></section></div>
   </>;
   if (world === "liabilities") {
     const names = new Set(view.liabilities.accounts.map((account) => account.displayName));
     const recent = view.recentAndUpcoming.recent.filter((item) => names.has(item.accountName));
     const upcoming = view.recentAndUpcoming.upcoming.filter((item) => names.has(item.accountName));
-    return <><p className="world-kicker">Liabilities</p><h2>Liability activity</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Purchases, refunds and payments" items={recent} currency={currency} empty="No recent liability activity is available." /></section><section><p>Now</p><strong>{view.liabilities.accountCount} active financial object{view.liabilities.accountCount === 1 ? "" : "s"}</strong><small>Balances remain visible on the spatial objects; payments are not counted as Lifestyle spending.</small></section><section><p>Next</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known obligation" : "Expected charge"}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}{upcoming.length === 0 && <small>No supported upcoming obligation.</small>}</section></div></>;
+    return <><p className="world-kicker">Liabilities</p><h2>Obligations</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Recent activity" items={recent} currency={currency} empty="No recent liability activity is available." /></section><section><p>Now</p><strong>{view.liabilities.accountCount} active obligation{view.liabilities.accountCount === 1 ? "" : "s"}</strong><small>Payments reduce liability and are excluded from Lifestyle.</small></section><section><p>Next</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known obligation" : "Expected charge"}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}{upcoming.length === 0 && <small>No supported upcoming obligation.</small>}</section></div></>;
   }
-  if (world === "home") return <RealWorldDetail title="Home World" heading="Your home, grounded in known facts" object={view.home} currency={currency} manageFacts />;
-  if (world === "vehicle") return <RealWorldDetail title="Vehicle World" heading="Mobility and its known financing" object={view.vehicle} currency={currency} manageFacts />;
+  if (world === "home") return <RealWorldDetail title="Home" heading="Home" object={view.home} currency={currency} manageFacts />;
+  if (world === "vehicle") return <RealWorldDetail title="Vehicle" heading="Vehicle financing" object={view.vehicle} currency={currency} manageFacts />;
   if (world === "lifestyle") return <>
     <p className="world-kicker">Lifestyle</p>
-    <h2>Where spending went</h2>
+    <h2>Lifestyle spending</h2>
     <div className="pnn-grid"><section><p>Past</p>{view.lifestyle.categories.slice(0, 3).map((category) => <span key={category.viewKey}><strong>{category.label}</strong><small>{category.transactions.length} transactions · {formatMoney(category.total, currency)}</small></span>)}</section><section><p>Now</p><strong>{view.lifestyle.understanding.status === "known" ? `${view.lifestyle.understanding.percentage}% of spending value understood` : "Understanding unavailable"}</strong><small>{view.lifestyle.understanding.status === "known" ? `${view.lifestyle.unclassifiedCount} unresolved in this period` : view.lifestyle.understanding.reason}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p><small>Grouped review improves future matching without requiring every historical transaction to be classified.</small></section></div>
     {view.lifestyle.unclassifiedCount > 0 && <Link className="review-beacon" href="/review">{view.lifestyle.unclassifiedCount} need review <span aria-hidden="true">↗</span></Link>}
   </>;
   return <>
     <p className="world-kicker">Cashflow</p>
-    <h2>Money moving through your universe</h2>
+    <h2>Cashflow</h2>
     <div className="pnn-grid"><section><p>Past</p><ActivityList title="Recent meaningful movements" items={view.recentAndUpcoming.recent} currency={currency} empty="No recent activity is available." /></section><section><p>Now</p><strong>{moneyLabel(view.cashflow.moneyIn, currency)} in · {moneyLabel(view.cashflow.moneyOut, currency)} out</strong><small>Net {moneyLabel(view.cashflow.net, currency)} · {view.coverage.message}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p>{view.recentAndUpcoming.upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}</section></div>
   </>;
 }
@@ -157,7 +157,7 @@ function LifestyleDetail({ category, currency, period }: { category: HomepageLif
   return <>
     <p className="world-kicker">Lifestyle · Category</p>
     <h2>{category.label}</h2>
-    <div className="pnn-grid"><section><p>Past</p><ul className="lifestyle-transactions">{category.transactions.slice(0, 6).map((transaction) => <li key={transaction.viewKey}><span><strong>{transaction.description}</strong><small>{transaction.date} · {transaction.accountName}{transaction.needsReview ? " · needs review" : ""}</small>{transaction.correction && <InlineTransactionCorrection correction={transaction.correction} />}</span><b className={transaction.spendingImpact < 0 ? "refund" : "spending"}>{transaction.spendingImpact < 0 ? "−" : ""}{formatMoney(Math.abs(transaction.spendingImpact), currency)}</b></li>)}</ul></section><section><p>Now</p><strong>{category.transactions.length} supporting transaction{category.transactions.length === 1 ? "" : "s"}</strong><small>{formatMoney(category.total, currency)} in the selected period.</small><PeriodSelector selected={period.key} /></section><section><p>Next</p><small>No future category activity is asserted without known obligations or strong recurrence evidence.</small></section></div>
+    <div className="category-detail-grid"><section><p className="section-label">Transactions</p><ul className="lifestyle-transactions">{category.transactions.map((transaction) => <li key={transaction.viewKey}><span><strong>{transaction.description}</strong><small>{transaction.date} · {transaction.accountName}{transaction.needsReview ? " · needs review" : ""}</small>{transaction.correction && <InlineTransactionCorrection correction={transaction.correction} />}</span><b className={transaction.spendingImpact < 0 ? "refund" : "spending"}>{transaction.spendingImpact < 0 ? "−" : ""}{formatMoney(Math.abs(transaction.spendingImpact), currency)}</b></li>)}</ul></section><aside><p className="section-label">This period</p><strong className="category-total">{formatMoney(category.total, currency)}</strong><small>{category.transactions.length} transaction{category.transactions.length === 1 ? "" : "s"}</small><PeriodSelector selected={period.key} /></aside></div>
     {category.needsReview && <Link className="review-beacon" href="/review">Review these uncategorized transactions <span aria-hidden="true">↗</span></Link>}
   </>;
 }
@@ -191,39 +191,50 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
   const [selectedCashflow, setSelectedCashflow] = useState<CashflowChildKey | null>(null);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [travelling, setTravelling] = useState(false);
-  const beginTravel = (arrive?: () => void) => { setTravelling(true); window.setTimeout(() => { setTravelling(false); arrive?.(); }, 520); };
+  const [surfaceAfterTravel, setSurfaceAfterTravel] = useState(false);
+  const beginTravel = (showSurface: boolean) => {
+    if (travelling) return;
+    setSurfaceOpen(false);
+    setSurfaceAfterTravel(showSurface);
+    setTravelling(true);
+  };
+  useEffect(() => {
+    if (!travelling) return;
+    const timer = window.setTimeout(() => { setTravelling(false); setSurfaceOpen(surfaceAfterTravel); }, 760);
+    return () => window.clearTimeout(timer);
+  }, [travelling, surfaceAfterTravel]);
   const selectedLifestyleCategory = selectedLifestyle ? view.lifestyle.categories.find((category) => category.label === selectedLifestyle) ?? null : null;
-  const selectWorld = (world: WorldKey) => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelected(world); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); };
-  const leaveWorld = () => { beginTravel(); setSelected(null); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); setSurfaceOpen(false); };
-  const leaveObject = () => { setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); setSurfaceOpen(true); };
+  const selectWorld = (world: WorldKey) => { setSelected(world); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); beginTravel(true); };
+  const leaveWorld = () => { setSelected(null); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); beginTravel(false); };
+  const leaveObject = () => { setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); beginTravel(true); };
+  const closeSurface = () => { setSurfaceAfterTravel(false); setSurfaceOpen(false); };
   const accountWorld = selected === "cash" || selected === "investments" || selected === "liabilities" ? selected : null;
   const worldAccounts = accountWorld ? view[accountWorld].accounts : [];
   const depth = selectedAccount || selectedLifestyleCategory || selectedCashflow ? "object" : selected ? "world" : "person";
   const accountTone = selected === "investments" ? "violet" : selected === "liabilities" ? "rose" : "mint";
-  const accountChildren: SpatialChild[] = worldAccounts.map((account) => ({ key: account.viewKey, label: account.displayName, value: moneyLabel(account.balance, view.currency), tone: accountTone, selected: selectedAccount?.viewKey === account.viewKey, select: () => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelectedAccount(account); } }));
-  const lifestyleChildren: SpatialChild[] = selected === "lifestyle" ? view.lifestyle.categories.slice(0, 5).map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: category.needsReview ? "mint" : "coral", selected: selectedLifestyleCategory?.viewKey === category.viewKey, select: () => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelectedLifestyle(category.label); } })) : [];
+  const accountChildren: SpatialChild[] = worldAccounts.map((account) => ({ key: account.viewKey, label: account.displayName, value: moneyLabel(account.balance, view.currency), tone: accountTone, selected: selectedAccount?.viewKey === account.viewKey, select: () => { setSelectedAccount(account); beginTravel(true); } }));
+  const lifestyleChildren: SpatialChild[] = selected === "lifestyle" ? view.lifestyle.categories.slice(0, 7).map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: category.needsReview ? "mint" : "coral", selected: selectedLifestyleCategory?.viewKey === category.viewKey, select: () => { setSelectedLifestyle(category.label); beginTravel(true); } })) : [];
   const cashflowDefinitions: ReadonlyArray<{ key: CashflowChildKey; label: string; value: string; tone: string }> = [
     { key: "money-in", label: "Money In", value: moneyLabel(view.cashflow.moneyIn, view.currency), tone: "mint" },
     { key: "money-out", label: "Money Out", value: moneyLabel(view.cashflow.moneyOut, view.currency), tone: "coral" },
     { key: "recent", label: "Recent", value: `${view.recentAndUpcoming.recent.length} events`, tone: "blue" },
     { key: "upcoming", label: "Upcoming", value: `${view.recentAndUpcoming.upcoming.length} known + expected`, tone: "violet" },
   ];
-  const cashflowChildren: SpatialChild[] = selected === "cashflow" ? cashflowDefinitions.map((child) => ({ ...child, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); setSurfaceOpen(true); } })) : [];
+  const cashflowChildren: SpatialChild[] = selected === "cashflow" ? cashflowDefinitions.map((child) => ({ ...child, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); beginTravel(true); } })) : [];
   const spatialChildren = [...accountChildren, ...lifestyleChildren, ...cashflowChildren];
-  return <main className={`universe-shell depth-${depth} ${selected ? `world-${selected}` : ""} ${travelling ? "is-travelling" : ""}`}>
+  return <main className={`universe-shell depth-${depth} ${selected ? `world-${selected}` : ""} ${travelling ? "is-travelling" : ""}`} aria-busy={travelling}>
+    <WebglAurora />
     <div className="space-dust" aria-hidden="true" />
-    <header className="universe-header"><div><button type="button" className="universe-brand" onClick={leaveWorld} aria-label="Return to Net Worth">Vorvex</button><span>My financial universe · {view.snapshotDate ?? "snapshot unavailable"}</span></div><nav className="header-actions" aria-label="Financial data tools"><Link href="/facts">My data</Link><Link href="/statements">Add statements</Link><Link href="/review" className="header-review">Needs attention {view.lifestyle.unclassifiedCount > 0 && <span>{view.lifestyle.unclassifiedCount}</span>}</Link></nav></header>
-    <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Net Worth</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
+    <header className="universe-header"><div><button type="button" className="universe-brand" onClick={leaveWorld} aria-label="Return to Universe">Vorvex</button><span>{view.snapshotDate ?? "Snapshot unavailable"}</span></div><nav className="header-actions" aria-label="Financial data tools"><Link href="/facts">My data</Link><Link href="/statements">Add statements</Link><Link href="/review" className="header-review">Needs attention {view.lifestyle.unclassifiedCount > 0 && <span>{view.lifestyle.unclassifiedCount}</span>}</Link></nav></header>
+    <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Universe</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
     <section className="universe-stage" aria-label="Your financial Worlds" data-depth={depth}>
-      <WebglAurora />
       <button className="person-core" type="button" onClick={leaveWorld} aria-label="Return to your universe"><span>Net worth</span><strong>{moneyLabel(view.position.netWorth, view.currency)}</strong><small>Assets {moneyLabel(view.position.assets, view.currency)}<br />Liabilities {moneyLabel(view.position.liabilities, view.currency)}</small><em>Based on connected financial data</em></button>
       {WORLD_META.map((world) => { const isParent = depth === "object" && selected === world.key; return <button key={world.key} type="button" onClick={isParent ? leaveObject : () => selectWorld(world.key)} aria-label={isParent ? `Return to ${world.label}` : undefined} aria-pressed={selected === world.key} className={`world-node ${world.position} tone-${world.tone} ${selected === world.key ? "is-selected" : ""}`}><i aria-hidden="true" /><WorldIcon world={world.key} /><span>{world.label}</span><strong>{nodeValue(world.key, view)}</strong></button>; })}
-      {selected && <div className="world-focus" aria-hidden="true"><i /><span>{WORLD_META.find((world) => world.key === selected)?.label}</span></div>}
       {spatialChildren.map((child, index) => <button type="button" key={child.key} className={`child-object child-${index + 1} tone-${child.tone} ${child.selected ? "is-selected" : ""}`} onClick={child.select}><i aria-hidden="true" />{selected && <WorldIcon world={selected} />}<span>{child.label}</span><strong>{child.value}</strong></button>)}
     </section>
     {selected && (selectedAccount || selectedLifestyleCategory) && <IntelligenceRail view={view} world={selected} account={selectedAccount} category={selectedLifestyleCategory} />}
-    {selected && !surfaceOpen && <button type="button" className="open-activity" onClick={() => setSurfaceOpen(true)}>Open Past / Now / Next</button>}
-    {selected && surfaceOpen && <aside className="world-dock" aria-live="polite"><button className="close-surface" type="button" onClick={() => setSurfaceOpen(false)} aria-label="Close information surface">×</button><div className="dock-glow" aria-hidden="true" />{selectedLifestyleCategory && selected === "lifestyle"
+    {selected && !surfaceOpen && !travelling && <button type="button" className="open-activity" onClick={() => setSurfaceOpen(true)}>Open details</button>}
+    {selected && surfaceOpen && !travelling && <aside className="world-dock" aria-live="polite"><button className="close-surface" type="button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); closeSurface(); }} aria-label="Close information surface">×</button><div className="dock-glow" aria-hidden="true" />{selectedLifestyleCategory && selected === "lifestyle"
       ? <LifestyleDetail category={selectedLifestyleCategory} currency={view.currency} period={view.period} />
       : selectedCashflow && selected === "cashflow"
       ? <CashflowChildDetail child={selectedCashflow} view={view} />

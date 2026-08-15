@@ -184,6 +184,22 @@ test("a resolved transaction can be corrected in place without duplication", asy
   } finally { await context.cleanup(); }
 });
 
+test("a classified transaction can be corrected contextually before a review decision exists", async () => {
+  const context = await fixture();
+  try {
+    const source = transaction();
+    context.store.evaluateTransaction(source, FIRST.toISOString());
+    const correction = context.service.correctionForTransaction(source, new Date("2099-08-08T12:02:00.000Z"));
+    assert.ok(correction);
+    context.service.correct(correction.actionToken, { financialMeaning: "expense", category: "Maintenance & Repairs", world: "vehicle" }, new Date("2099-08-08T12:03:00.000Z"));
+    assert.equal(context.store.listReviewItems("resolved").length, 1);
+    assert.equal(context.store.listRules().length, 1);
+    const applied = context.store.evaluateTransaction(source, "2099-08-08T12:04:00.000Z");
+    assert.equal(applied.category, "Maintenance & Repairs");
+    assert.equal(applied.world, "vehicle");
+  } finally { await context.cleanup(); }
+});
+
 test("mortgage search concept maps one grouped confirmation through Cashflow and Home without Lifestyle spending", async () => {
   const context = await fixture();
   try {

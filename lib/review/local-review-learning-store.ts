@@ -305,9 +305,11 @@ export class LocalReviewLearningStore {
   correctReview(reviewId: string, decision: ReviewDecision, decidedAt: string) {
     assertTimestamp(decidedAt);
     if (decision.kind !== "classify") throw new ReviewLearningError("REVIEW_INVALID");
-    const row = this.#database.prepare("SELECT * FROM review_items WHERE review_id = ? AND status = 'resolved'").get(reviewId) as SqlRow | undefined;
+    const row = this.#database.prepare("SELECT * FROM review_items WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
     const oldDecisionRow = this.#database.prepare("SELECT * FROM review_decisions WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
-    if (!row || !oldDecisionRow) throw new ReviewLearningError("REVIEW_NOT_FOUND");
+    if (!row) throw new ReviewLearningError("REVIEW_NOT_FOUND");
+    if (String(row.status) === "pending" && !oldDecisionRow) return this.resolveReview(reviewId, decision, decidedAt);
+    if (String(row.status) !== "resolved" || !oldDecisionRow) throw new ReviewLearningError("REVIEW_NOT_FOUND");
     const item = this.#reviewFromRow(row); const old = decryptJsonPayload<DecisionPayload>(String(oldDecisionRow.encrypted_payload), this.#key);
     const classification: RuleClassification = { financialMeaning: decision.financialMeaning ?? null, category: decision.category ?? null, world: decision.world ?? null };
     assertClassification(classification);

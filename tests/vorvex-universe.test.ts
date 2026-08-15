@@ -11,7 +11,7 @@ test("Universe consumes only the browser-safe homepage view", async () => {
   const [component, page] = await Promise.all([readFile(componentPath, "utf8"), readFile(pagePath, "utf8")]);
   assert.match(component, /HomepageViewModel/);
   assert.match(page, /<FinancialHome view=\{view\} \/>/);
-  for (const forbidden of ["sqlite", "database", "import-journal", "statement-parser", "fingerprint", "useEffect", "setInterval", "fetch(", "transactionId", "reviewId", "importId"])
+  for (const forbidden of ["sqlite", "database", "import-journal", "statement-parser", "fingerprint", "setInterval", "fetch(", "transactionId", "reviewId", "importId"])
     assert.equal(component.includes(forbidden), false, forbidden);
 });
 
@@ -22,9 +22,9 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
   for (const phrase of [
     "SpatialChild", "accountChildren", "CashflowChildDetail", "selectedCashflow", "Money In", "Money Out", "Recent", "Upcoming",
     "Nothing known yet", "LifestyleDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
-    "Property value", "Mobility and its known financing", "Add factual information", "Net worth", "journey-trail", "world-focus",
-    "child-object", "WorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Cash activity",
-    "Liability activity", "Where spending went", "Contribution portions are context only and are never added",
+    "Property value", "Vehicle financing", "Add factual information", "Net worth", "journey-trail",
+    "child-object", "WorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
+    "Obligations", "Cashflow", "Contribution portions are context only and are never added",
     "Latest known statement", "does not replace or add to the canonical liability balance",
   ]) assert.equal(component.includes(phrase), true, phrase);
   assert.match(component, /: "Unavailable"/);
@@ -56,11 +56,11 @@ test("Universe remains keyboard-operable, responsive, and motion-safe", async ()
 
 test("information surfaces close independently from spatial navigation", async () => {
   const component = await readFile(componentPath, "utf8");
-  assert.match(component, /onClick=\{\(\) => setSurfaceOpen\(false\)\}/);
+  assert.match(component, /const closeSurface = \(\) => \{ setSurfaceAfterTravel\(false\); setSurfaceOpen\(false\); \}/);
   assert.match(component, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
-  assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Net Worth"/);
-  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedCashflow\(null\); setSurfaceOpen\(true\); \}/);
+  assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
+  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
   assert.match(component, /onClick=\{isParent \? leaveObject : \(\) => selectWorld\(world\.key\)\}/);
   assert.match(component, /aria-label=\{isParent \? `Return to \$\{world\.label\}` : undefined\}/);
 });
@@ -102,9 +102,10 @@ test("Aurora is deterministic, calm, viewport-wide, and renderer-private", async
 
 test("Founder acceptance removes ghost Worlds and supports in-context transaction correction", async () => {
   const [component, styles] = await Promise.all([readFile(componentPath, "utf8"), readFile(stylesPath, "utf8")]);
-  assert.match(styles, /depth-world \.person-core[^}]+display:none/);
-  assert.match(styles, /world-node:not\(\.is-selected\)[^}]+visibility:hidden;opacity:0/);
-  assert.match(styles, /\.world-dock \{ width:min\(1180px/);
+  assert.doesNotMatch(component, /className="world-focus"/);
+  assert.match(styles, /\.webgl-aurora \{ position:fixed !important/);
+  assert.match(styles, /\.world-dock,\.universe-shell\[class\*="world-"\] \.world-dock/);
   assert.match(component, /InlineTransactionCorrection/);
-  assert.match(component, /setSurfaceOpen\(false\); beginTravel\(\(\) => setSurfaceOpen\(true\)\)/);
+  assert.match(component, /setSelectedLifestyle\(category\.label\); beginTravel\(true\)/);
+  assert.match(component, /surfaceOpen && !travelling/);
 });

@@ -225,9 +225,9 @@ export class FounderReviewService {
     const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
     const aliases = this.#store.listLanguageAliases();
     const corrections = new Map<string, { actionToken: string; suggestions: readonly BrowserReviewSuggestion[] }>();
-    for (const item of this.#store.listReviewItems("resolved")) {
+    for (const item of this.#store.listReviewItems(null)) {
       const transaction = transactionById.get(item.transactionId);
-      if (!transaction || this.#store.reviewDecision(item.id)?.kind !== "classify") continue;
+      if (!transaction || item.status === "ignored") continue;
       corrections.set(transaction.id, {
         actionToken: sealReviewReference([item.id], this.#key, now),
         suggestions: suggestionsFor(item, [transaction], aliases),

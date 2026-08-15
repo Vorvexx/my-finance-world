@@ -36,7 +36,6 @@ export async function saveFounderReview(_previous: ReviewActionState, formData: 
   if (!saved) return { status: "error", message: "Review could not be saved. Refresh and try again." };
   appendSafeAuditEvent({ at: new Date().toISOString(), event: "review-saved", authority: "founder", source: "local-ui", reason: choice === "classify" ? "Founder confirmed a transaction classification." : `Founder selected ${choice}.` });
   revalidatePath("/");
-  revalidatePath("/review");
   return { status: "saved", message: choice === "review-later" ? "Set aside for later. Nothing was classified." : `Done — ${value(formData, "world") || "financial meaning"} → ${value(formData, "category") || value(formData, "financialMeaning")}` };
 }
 
