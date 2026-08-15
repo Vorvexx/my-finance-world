@@ -1,163 +1,235 @@
 "use client";
 
-import { useState } from "react";
-import type { CanonicalFinancialModel, MoneyWorldKey } from "@/types/finance";
+import Link from "next/link";
+import { useState, type ReactNode } from "react";
+import type { HomepageAccount, HomepageActivity, HomepageLifestyleCategory, HomepageMoney, HomepageViewModel } from "@/types/homepage";
+import { FINANCIAL_PERIODS } from "@/lib/homepage/financial-period";
+import WebglAurora from "@/components/webgl-aurora";
+import InlineTransactionCorrection from "@/components/inline-transaction-correction";
 
-const formatMoney = (value: number, currency: string) =>
-  new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+export type WorldKey = "cash" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "cashflow";
+type CashflowChildKey = "money-in" | "money-out" | "recent" | "upcoming";
+type SpatialChild = { key: string; label: string; value: string; tone: string; selected: boolean; select: () => void };
 
-const worldDefinitions: ReadonlyArray<{
-  key: MoneyWorldKey;
-  name: string;
-  description: string;
-  icon: string;
-}> = [
-  { key: "cash", name: "Cash", description: "Money available now", icon: "↙" },
-  { key: "investments", name: "Investments", description: "Long-term financial assets", icon: "↗" },
-  { key: "home", name: "Home", description: "Property and related commitments", icon: "⌂" },
-  { key: "vehicle", name: "Vehicle", description: "Vehicle value and financing", icon: "◇" },
-  { key: "creditDebt", name: "Credit / Debt", description: "Balances currently owed", icon: "−" },
-  { key: "income", name: "Income", description: "Money entering your world", icon: "+" },
-  { key: "upcoming", name: "Upcoming", description: "Known future financial events", icon: "○" },
-  { key: "future", name: "Future Worlds", description: "Worlds not yet recorded", icon: "∞" },
+const WORLD_META: ReadonlyArray<{ key: WorldKey; label: string; position: string; tone: string }> = [
+  { key: "cash", label: "Cash", position: "constellation-cash", tone: "mint" },
+  { key: "investments", label: "Investments", position: "constellation-investments", tone: "violet" },
+  { key: "liabilities", label: "Liabilities", position: "constellation-liabilities", tone: "rose" },
+  { key: "home", label: "Home", position: "constellation-home", tone: "amber" },
+  { key: "vehicle", label: "Vehicle", position: "constellation-vehicle", tone: "cyan" },
+  { key: "lifestyle", label: "Lifestyle", position: "constellation-lifestyle", tone: "coral" },
+  { key: "cashflow", label: "Cashflow", position: "constellation-cashflow", tone: "blue" },
 ];
+export function WorldIcon({ world }: { world: WorldKey }) {
+  const common = { viewBox: "0 0 48 48", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+  if (world === "cash") return <svg {...common}><path d="M10 16h27a4 4 0 0 1 4 4v17H10a4 4 0 0 1-4-4V15a5 5 0 0 1 5-5h23"/><path d="M31 24h10v8H31a4 4 0 0 1 0-8Z"/><circle cx="33" cy="28" r="1"/></svg>;
+  if (world === "cashflow") return <svg {...common}><path d="M7 35 17 23l8 7 15-19"/><path d="M32 11h8v8"/><path d="M8 13v22h33"/></svg>;
+  if (world === "investments") return <svg {...common}><path d="M8 38h33"/><path d="M12 33V24h6v9M22 33V18h6v15M32 33V11h6v22"/><path d="m10 19 10-7 8 4 12-9"/></svg>;
+  if (world === "lifestyle") return <svg {...common}><path d="M10 18h25v9a11 11 0 0 1-11 11h-3a11 11 0 0 1-11-11v-9Z"/><path d="M35 22h3a5 5 0 0 1 0 10h-5M16 12c-2-3 2-4 0-7M24 12c-2-3 2-4 0-7M32 12c-2-3 2-4 0-7"/></svg>;
+  if (world === "liabilities") return <svg {...common}><rect x="6" y="11" width="36" height="26" rx="4"/><path d="M6 18h36M12 30h9"/><circle cx="35" cy="29" r="2"/></svg>;
+  if (world === "vehicle") return <svg {...common}><path d="m8 29 4-11a5 5 0 0 1 5-3h15a5 5 0 0 1 5 3l4 11v8h-5v-4H12v4H7v-8h34"/><path d="M13 27h22M17 22h14"/><circle cx="14" cy="29" r="2"/><circle cx="34" cy="29" r="2"/></svg>;
+  return <svg {...common}><path d="m5 23 19-16 19 16"/><path d="M10 20v21h28V20M20 41V29h8v12"/><path d="M17 20h14"/></svg>;
+}
+const formatMoney = (value: number, currency: string) => new Intl.NumberFormat("en-CA", {
+  style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+}).format(value);
+const moneyLabel = (value: HomepageMoney, currency: string) => value.status === "known"
+  ? formatMoney(value.amount, currency)
+  : "Unavailable";
+const PeriodSelector = ({ selected }: { selected: HomepageViewModel["period"]["key"] }) => <nav className="period-selector" aria-label="Financial period">{FINANCIAL_PERIODS.map((period) => <Link key={period.key} href={`/?period=${period.key}`} aria-current={selected === period.key ? "page" : undefined}>{period.label}</Link>)}</nav>;
 
-export default function FinancialHome({ model }: { model: CanonicalFinancialModel }) {
-  const [selectedWorld, setSelectedWorld] = useState<MoneyWorldKey | null>(null);
-  const { summary, money, accountsByWorld, totalsByWorld } = model;
-  const moneyLabel = (value: number | null | undefined) =>
-    value == null ? "Unknown" : formatMoney(value, money.currency);
+function WorldDetail({ world, view }: { world: WorldKey; view: HomepageViewModel }) {
+  const currency = view.currency;
+  if (world === "cash") {
+    const names = new Set(view.cash.accounts.map((account) => account.displayName));
+    const recent = view.recentAndUpcoming.recent.filter((item) => names.has(item.accountName));
+    const upcoming = view.recentAndUpcoming.upcoming.filter((item) => names.has(item.accountName));
+    const moneyIn = view.cash.accounts.reduce((sum, account) => sum + account.activity.moneyIn, 0);
+    const moneyOut = view.cash.accounts.reduce((sum, account) => sum + account.activity.moneyOut, 0);
+    return <>
+      <p className="world-kicker">Cash</p>
+      <h2>Cash activity</h2>
+      <div className="pnn-grid"><section><p>Past</p><ActivityList title="Recent movements" items={recent} currency={currency} empty="No recent Cash activity is available." /></section><section><p>Now</p><strong>{formatMoney(moneyIn, currency)} entered</strong><small>{formatMoney(moneyOut, currency)} left across {view.cash.accountCount} account{view.cash.accountCount === 1 ? "" : "s"} this {view.period.label.toLowerCase()}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}{upcoming.length === 0 && <small>Nothing known or strongly expected yet.</small>}</section></div>
+    </>;
+  }
+  if (world === "investments") return <>
+    <p className="world-kicker">Investments</p>
+    <h2>Recorded investment activity</h2>
+    <div className="pnn-grid"><section><p>Past</p>{view.investments.accounts.flatMap((account) => account.investmentHistory?.snapshots.slice(-1) ?? []).slice(0, 3).map((snapshot) => <span key={snapshot.date}><strong>Recorded account value</strong><small>{snapshot.date} · {formatMoney(snapshot.value, currency)}</small></span>)}</section><section><p>Now</p><strong>{view.investments.change.status === "known" ? `${view.investments.change.amount > 0 ? "+" : ""}${formatMoney(view.investments.change.amount, currency)} recorded value movement` : "Comparable movement unavailable"}</strong><small>{view.investments.changeMessage}</small></section><section><p>Next</p><small>Contributions and future performance remain Unknown unless canonical transaction or statement evidence supports them.</small></section></div>
+  </>;
+  if (world === "liabilities") {
+    const names = new Set(view.liabilities.accounts.map((account) => account.displayName));
+    const recent = view.recentAndUpcoming.recent.filter((item) => names.has(item.accountName));
+    const upcoming = view.recentAndUpcoming.upcoming.filter((item) => names.has(item.accountName));
+    return <><p className="world-kicker">Liabilities</p><h2>Liability activity</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Purchases, refunds and payments" items={recent} currency={currency} empty="No recent liability activity is available." /></section><section><p>Now</p><strong>{view.liabilities.accountCount} active financial object{view.liabilities.accountCount === 1 ? "" : "s"}</strong><small>Balances remain visible on the spatial objects; payments are not counted as Lifestyle spending.</small></section><section><p>Next</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known obligation" : "Expected charge"}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}{upcoming.length === 0 && <small>No supported upcoming obligation.</small>}</section></div></>;
+  }
+  if (world === "home") return <RealWorldDetail title="Home World" heading="Your home, grounded in known facts" object={view.home} currency={currency} manageFacts />;
+  if (world === "vehicle") return <RealWorldDetail title="Vehicle World" heading="Mobility and its known financing" object={view.vehicle} currency={currency} manageFacts />;
+  if (world === "lifestyle") return <>
+    <p className="world-kicker">Lifestyle</p>
+    <h2>Where spending went</h2>
+    <div className="pnn-grid"><section><p>Past</p>{view.lifestyle.categories.slice(0, 3).map((category) => <span key={category.viewKey}><strong>{category.label}</strong><small>{category.transactions.length} transactions · {formatMoney(category.total, currency)}</small></span>)}</section><section><p>Now</p><strong>{view.lifestyle.understanding.status === "known" ? `${view.lifestyle.understanding.percentage}% of spending value understood` : "Understanding unavailable"}</strong><small>{view.lifestyle.understanding.status === "known" ? `${view.lifestyle.unclassifiedCount} unresolved in this period` : view.lifestyle.understanding.reason}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p><small>Grouped review improves future matching without requiring every historical transaction to be classified.</small></section></div>
+    {view.lifestyle.unclassifiedCount > 0 && <Link className="review-beacon" href="/review">{view.lifestyle.unclassifiedCount} need review <span aria-hidden="true">↗</span></Link>}
+  </>;
+  return <>
+    <p className="world-kicker">Cashflow</p>
+    <h2>Money moving through your universe</h2>
+    <div className="pnn-grid"><section><p>Past</p><ActivityList title="Recent meaningful movements" items={view.recentAndUpcoming.recent} currency={currency} empty="No recent activity is available." /></section><section><p>Now</p><strong>{moneyLabel(view.cashflow.moneyIn, currency)} in · {moneyLabel(view.cashflow.moneyOut, currency)} out</strong><small>Net {moneyLabel(view.cashflow.net, currency)} · {view.coverage.message}</small><PeriodSelector selected={view.period.key} /></section><section><p>Next</p>{view.recentAndUpcoming.upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.date} · {formatMoney(item.amount, currency)}</small></span>)}</section></div>
+  </>;
+}
 
-  return (
-    <main className="min-h-screen bg-[#071018] text-[#f4f7f5]">
-      <div className="mx-auto max-w-[1440px] px-5 py-6 md:px-9 md:py-9">
-        <header className="border-b border-white/10 pb-7">
-          <p className="text-xs font-bold uppercase tracking-[0.26em] text-emerald-400">My Finance World</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Your financial position</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            {money.lastUpdated ? `Financial snapshot · ${money.lastUpdated}` : "Financial snapshot unavailable"}
-          </p>
-        </header>
+function AccountDetail({ account, world, view }: { account: HomepageAccount; world: "cash" | "investments" | "liabilities"; view: HomepageViewModel }) {
+  const worldName = world === "cash" ? "Cash" : world === "investments" ? "Investments" : "Liabilities";
+  const next = view.recentAndUpcoming.upcoming.find((item) => item.accountName === account.displayName);
+  const snapshots = account.investmentHistory?.snapshots.slice(-3).reverse() ?? [];
+  const recent = account.activity.recent.slice(0, 3);
+  const isCreditCard = account.accountType === "Credit card";
+  return <>
+    <p className="world-kicker">{worldName} · Account</p>
+    <h2>{account.displayName}</h2>
+    <div className="pnn-grid">
+      <section><p>Past</p>{snapshots.map((snapshot) => <span key={snapshot.date}><small>{snapshot.date}</small><strong>{formatMoney(snapshot.value, account.currency)}</strong></span>)}{snapshots.length === 0 && recent.map((item) => <span key={item.viewKey}><strong>{item.description}</strong><small>{item.date} · {item.direction === "inflow" ? "+" : "−"}{formatMoney(item.amount, account.currency)}</small></span>)}{snapshots.length === 0 && recent.length === 0 && <small>No recent factual activity</small>}</section>
+      <section><p>Now</p><strong>{account.institution} · {account.accountType}</strong><small>{account.freshness.status === "known" ? `Balance recorded ${account.freshness.asOf}` : account.freshness.message}</small><small>{isCreditCard ? `${account.activity.purchases.length} recent purchases · ${account.activity.refunds.length} refunds · ${account.activity.payments.length} payments` : `${formatMoney(account.activity.moneyIn, account.currency)} in · ${formatMoney(account.activity.moneyOut, account.currency)} out this ${view.period.label.toLowerCase()}`}</small>{isCreditCard && account.activity.categoryDistribution.slice(0, 3).map((category) => <span key={category.category}><strong>{category.category}</strong><small>{formatMoney(category.amount, account.currency)}</small></span>)}</section>
+      <section><p>Next</p>{next ? <><strong>{next.certainty === "known" ? `Known · due ${next.date}` : `Expected · around ${next.date}`}</strong><small>{next.certainty === "known" ? formatMoney(next.amount, account.currency) : `~${formatMoney(next.amount, account.currency)} from recurring evidence`}</small></> : account.activity.expected.slice(0, 2).map((item) => <span key={item.viewKey}><strong>Expected · around {item.date}</strong><small>~{formatMoney(item.amount, account.currency)} · {item.evidenceCount} observations</small></span>)}{!next && account.activity.expected.length === 0 && <small>Nothing known or strongly expected yet</small>}</section>
+    </div>
+    {account.statement && <section className="statement-facts">
+      <h3>Latest known statement</h3>
+      <dl>
+        <div><dt>Statement balance</dt><dd>{formatMoney(account.statement.statementBalance, account.statement.currency)}</dd></div>
+        <div><dt>Minimum payment</dt><dd>{formatMoney(account.statement.minimumPayment, account.statement.currency)}</dd></div>
+        <div><dt>Payment due</dt><dd>{account.statement.paymentDueDate}</dd></div>
+        <div><dt>Statement date</dt><dd>{account.statement.statementDate}</dd></div>
+      </dl>
+      <small>The statement balance is supporting statement evidence and does not replace or add to the canonical liability balance.</small>
+    </section>}
+    {account.contributionBreakdown && <section className="contribution-facts">
+      <h3>Contribution breakdown</h3>
+      {account.contributionBreakdown.status === "known" ? <dl><div><dt>Employee</dt><dd>{formatMoney(account.contributionBreakdown.employee, account.currency)}</dd></div><div><dt>Employer</dt><dd>{formatMoney(account.contributionBreakdown.employer, account.currency)}</dd></div></dl> : <p><strong>Unknown</strong>{account.contributionBreakdown.message}</p>}
+      <small>Contribution portions are context only and are never added to the account total.</small>
+    </section>}
+    {account.investmentHistory && <InvestmentHistory history={account.investmentHistory} currency={account.currency} />}
+  </>;
+}
 
-        {model.status !== "loaded" && (
-          <section className="mt-6 rounded-[28px] border border-amber-300/25 bg-amber-300/[0.07] p-6">
-            <h2 className="text-lg font-semibold text-amber-100">{model.statusMessage}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Vorvex is ready, but financial values will remain Unknown until a valid private snapshot is available.
-            </p>
-          </section>
-        )}
+function InvestmentHistory({ history, currency }: { history: NonNullable<HomepageAccount["investmentHistory"]>; currency: string }) {
+  const values = history.snapshots.map((point) => point.value);
+  const minimum = Math.min(...values); const maximum = Math.max(...values); const span = Math.max(maximum - minimum, 1);
+  const points = history.snapshots.map((point, index) => `${history.snapshots.length === 1 ? 50 : index * 100 / (history.snapshots.length - 1)},${44 - ((point.value - minimum) / span) * 36}`).join(" ");
+  return <section className="investment-history"><div><p>Recorded value history</p><strong>{history.valueChange.status === "known" ? `${history.valueChange.amount > 0 ? "+" : ""}${formatMoney(history.valueChange.amount, currency)}` : "Change unavailable"}</strong></div>{history.snapshots.length > 1 && <svg viewBox="0 0 100 48" role="img" aria-label="Recorded account value history"><polyline points={points} /></svg>}<small>{history.message}</small></section>;
+}
 
-        <section className="mt-6 grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-          <article className="relative overflow-hidden rounded-[32px] border border-emerald-400/20 bg-[radial-gradient(circle_at_25%_20%,rgba(52,211,153,0.17),transparent_42%),#0b1821] p-7 md:p-9">
-            <p className="text-sm font-medium text-emerald-200">Your current net worth</p>
-            <p className="mt-3 text-5xl font-semibold tracking-[-0.06em] md:text-7xl">
-              {moneyLabel(summary?.netWorth)}
-            </p>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-              What is recorded as owned, minus what is recorded as owed. Unknown Worlds are excluded rather than estimated.
-            </p>
-            <div className="mt-9 grid grid-cols-2 gap-3 md:max-w-lg">
-              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                <p className="text-xs text-slate-500">Assets</p>
-                <p className="mt-1 text-lg font-semibold text-emerald-300">{moneyLabel(summary?.totalAssets)}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                <p className="text-xs text-slate-500">Liabilities</p>
-                <p className="mt-1 text-lg font-semibold text-rose-300">{moneyLabel(summary?.totalLiabilities)}</p>
-              </div>
-            </div>
-          </article>
+function ActivityList({ title, items, currency, empty, onSelect }: { title: string; items: HomepageViewModel["recentAndUpcoming"]["recent"]; currency: string; empty: string; onSelect?: (item: HomepageActivity) => void }) {
+  const content = (item: HomepageActivity) => <><span><strong>{item.description}</strong><small>{item.date} · {item.kind}{item.needsReview ? " · needs review" : ""}</small></span><b className={item.direction}>{item.direction === "inflow" ? "+" : "−"}{formatMoney(item.amount, currency)}</b></>;
+  const visible = items.slice(0, 3);
+  return <div><h3>{title}</h3>{visible.length ? <ul className="activity-stream">{visible.map((item) => <li key={item.viewKey}>{onSelect ? <button type="button" className="activity-select" onClick={() => onSelect(item)}>{content(item)}</button> : content(item)}</li>)}</ul> : <p className="world-empty">{empty}</p>}{items.length > visible.length && <details className="more-facts"><summary>More ({items.length - visible.length})</summary><ul className="activity-stream">{items.slice(3).map((item) => <li key={item.viewKey}>{content(item)}</li>)}</ul></details>}</div>;
+}
 
-          <article className="rounded-[32px] border border-white/10 bg-[#0b1821] p-7">
-            <p className="text-sm text-slate-400">Source integrity</p>
-            <h2 className="mt-2 text-2xl font-semibold">Canonical financial model</h2>
-            <dl className="mt-7 space-y-4 text-sm">
-              <div className="flex justify-between border-b border-white/10 pb-4">
-                <dt className="text-slate-500">Accounts</dt>
-                <dd>{money.accounts.length}</dd>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-4">
-                <dt className="text-slate-500">Currency</dt>
-                <dd>{money.currency}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Last updated</dt>
-                <dd>{money.lastUpdated ?? "Unknown"}</dd>
-              </div>
-            </dl>
-            <p className="mt-7 rounded-2xl bg-white/[0.04] p-4 text-sm leading-6 text-slate-300">
-              No sample balances, activity, income, property values, or upcoming events are included.
-            </p>
-          </article>
-        </section>
+function IntelligenceRail({ view, world, account, category }: { view: HomepageViewModel; world: WorldKey; account: HomepageAccount | null; category: HomepageLifestyleCategory | null }) {
+  const currency = view.currency;
+  let content: ReactNode;
+  if (account) content = <>
+    <section><strong>{account.displayName}</strong><small>{account.institution} · {account.accountType}</small></section>
+    <section><strong>{account.activity.recent.length} recent event{account.activity.recent.length === 1 ? "" : "s"}</strong><small>{formatMoney(account.activity.moneyIn, currency)} in · {formatMoney(account.activity.moneyOut, currency)} out this {view.period.label.toLowerCase()}</small></section>
+    {account.accountType === "Credit card" && <section><strong>{account.activity.purchases.length} purchases · {account.activity.refunds.length} refunds</strong><small>{account.activity.payments.length} payment event{account.activity.payments.length === 1 ? "" : "s"}; payments do not become Lifestyle spending.</small></section>}
+    {account.statement && <section className="insight-attention"><strong>Known payment obligation</strong><small>Minimum payment due {account.statement.paymentDueDate}; statement evidence does not duplicate the canonical balance.</small></section>}
+    {account.investmentHistory && <section><strong>Recorded value movement only</strong><small>{account.investmentHistory.message}</small></section>}
+  </>;
+  else if (world === "cash") content = <><section><strong>{view.cash.accountCount} connected cash account{view.cash.accountCount === 1 ? "" : "s"}</strong><small>Liquidity is {moneyLabel(view.cash.total, currency)} from the canonical position.</small></section><section><strong>Deposits and withdrawals</strong><small>{formatMoney(view.cash.accounts.reduce((sum, item) => sum + item.activity.moneyIn, 0), currency)} in · {formatMoney(view.cash.accounts.reduce((sum, item) => sum + item.activity.moneyOut, 0), currency)} out this {view.period.label.toLowerCase()}.</small></section></>;
+  else if (world === "cashflow") content = <><section><strong>{moneyLabel(view.cashflow.moneyIn, currency)} in</strong><small>{moneyLabel(view.cashflow.moneyOut, currency)} out · net {moneyLabel(view.cashflow.net, currency)}.</small></section><section><strong>{view.recentAndUpcoming.upcoming.length} known or expected movement{view.recentAndUpcoming.upcoming.length === 1 ? "" : "s"}</strong><small>Expected items remain evidence-based estimates, not obligations.</small></section></>;
+  else if (world === "lifestyle") content = <><section><strong>{category ? category.label : view.lifestyle.topCategories[0]?.category ?? "Spending pattern"}</strong><small>{category ? `${category.transactions.length} supporting transaction${category.transactions.length === 1 ? "" : "s"}.` : view.lifestyle.topCategories[0] ? `${formatMoney(view.lifestyle.topCategories[0].amount, currency)} in the selected period.` : "No categorized spending is available."}</small></section><section><strong>{view.lifestyle.understanding.status === "known" ? `${view.lifestyle.understanding.percentage}% of spending value understood` : "Understanding unavailable"}</strong><small>{view.lifestyle.unclassifiedCount} unresolved transaction{view.lifestyle.unclassifiedCount === 1 ? "" : "s"} in this period.</small></section></>;
+  else if (world === "investments") content = <><section><strong>{view.investments.accountCount} recorded investment account{view.investments.accountCount === 1 ? "" : "s"}</strong><small>{view.investments.changeMessage}</small></section><section><strong>Performance remains evidence-bound</strong><small>Recorded account-value movement is not described as return without complete contribution, withdrawal, fee and performance evidence.</small></section></>;
+  else if (world === "liabilities") content = <><section><strong>{view.liabilities.accountCount} liability object{view.liabilities.accountCount === 1 ? "" : "s"}</strong><small>Current canonical balance: {moneyLabel(view.liabilities.total, currency)}.</small></section><section><strong>Payments are settlements</strong><small>Credit-card payments reduce liability and never become Lifestyle spending.</small></section></>;
+  else content = <section><strong>Known facts only</strong><small>This World remains factual and Unknown where current evidence is incomplete.</small></section>;
+  return <aside className="intelligence-rail" aria-label={`${world} intelligence`}><div><p className="world-kicker">{world} · Intelligence</p>{content}</div><div className="assistant-reserve"><span>Vorvex Assistant</span><small>Reserved for future guided intelligence.</small></div></aside>;
+}
 
-        <section className="mt-10">
-          <div>
-            <h2 className="text-xl font-semibold">Money across your Worlds</h2>
-            <p className="mt-1 text-sm text-slate-500">Select a World to see the records that support its position.</p>
-          </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {worldDefinitions.map((definition) => {
-              const world = money.worlds[definition.key];
-              const accounts = accountsByWorld[definition.key];
-              const total = totalsByWorld[definition.key];
-              const isOpen = selectedWorld === definition.key;
+function CashflowChildDetail({ child, view }: { child: CashflowChildKey; view: HomepageViewModel }) {
+  const currency = view.currency;
+  const expected = view.recentAndUpcoming.upcoming.filter((item) => item.certainty === "expected");
+  if (child === "money-in") return <><p className="world-kicker">Cashflow · Money In</p><h2>Money In</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Largest inflows" items={view.cashflow.topInflows} currency={currency} empty="No eligible inflows are available." /></section><section><p>Now</p><strong className="pnn-value">{moneyLabel(view.cashflow.moneyIn, currency)}</strong><small>Selected {view.period.label.toLowerCase()}</small></section><section><p>Next</p>{expected.filter((item) => item.direction === "inflow").slice(0, 2).map((item) => <span key={item.viewKey}><strong>{item.label}</strong><small>Around {item.date} · ~{formatMoney(item.amount, currency)}</small></span>)}{!expected.some((item) => item.direction === "inflow") && <small>Nothing known yet</small>}</section></div></>;
+  if (child === "money-out") return <><p className="world-kicker">Cashflow · Money Out</p><h2>Money Out</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Largest outflows" items={view.cashflow.topOutflows} currency={currency} empty="No eligible outflows are available." /></section><section><p>Now</p><strong className="pnn-value">{moneyLabel(view.cashflow.moneyOut, currency)}</strong><small>Selected {view.period.label.toLowerCase()}</small></section><section><p>Next</p>{expected.filter((item) => item.direction === "outflow").slice(0, 2).map((item) => <span key={item.viewKey}><strong>{item.label}</strong><small>Around {item.date} · ~{formatMoney(item.amount, currency)}</small></span>)}{!expected.some((item) => item.direction === "outflow") && <small>Nothing known yet</small>}</section></div></>;
+  if (child === "recent") return <><p className="world-kicker">Cashflow · Recent</p><h2>Recent</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Factual activity" items={view.recentAndUpcoming.recent} currency={currency} empty="No recent activity is available." /></section><section><p>Now</p><strong>{view.recentAndUpcoming.recent.length} recent events</strong><small>{view.cashflow.reviewNeededCount} still need understanding in the selected period.</small></section><section><p>Next</p><small>{view.recentAndUpcoming.upcoming.length ? `${view.recentAndUpcoming.upcoming.length} known or expected movement${view.recentAndUpcoming.upcoming.length === 1 ? "" : "s"} ahead.` : "Nothing known or strongly expected yet."}</small></section></div></>;
+  const known = view.recentAndUpcoming.upcoming.filter((item) => item.certainty === "known");
+  return <><p className="world-kicker">Cashflow · Upcoming</p><h2>Upcoming</h2><div className="pnn-grid"><section><p>Past</p><ActivityList title="Evidence behind expectations" items={view.recentAndUpcoming.recent.filter((item) => item.kind === "income" || item.kind === "spending")} currency={currency} empty="No supporting recent pattern is available." /></section><section><p>Now · Known</p>{known.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.label}</strong><small>Due {item.date} · {formatMoney(item.amount, currency)}</small></span>)}{known.length === 0 && <small>Nothing known yet</small>}</section><section><p>Next · Expected</p>{expected.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.label}</strong><small>Around {item.date} · ~{formatMoney(item.amount, currency)}</small></span>)}{expected.length === 0 && <small>No strong historical pattern is currently upcoming.</small>}</section></div></>;
+}
 
-              return (
-                <article
-                  key={definition.key}
-                  className={`rounded-3xl border p-5 transition ${
-                    isOpen
-                      ? "border-emerald-400/40 bg-emerald-400/[0.07]"
-                      : "border-white/10 bg-[#0b1821]"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedWorld(isOpen ? null : definition.key)}
-                    className="w-full text-left"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-lg text-emerald-300">
-                      {definition.icon}
-                    </span>
-                    <p className="mt-5 font-semibold">{definition.name}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {moneyLabel(total)}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500">{definition.description}</p>
-                  </button>
+function LifestyleDetail({ category, currency, period }: { category: HomepageLifestyleCategory; currency: string; period: HomepageViewModel["period"] }) {
+  return <>
+    <p className="world-kicker">Lifestyle · Category</p>
+    <h2>{category.label}</h2>
+    <div className="pnn-grid"><section><p>Past</p><ul className="lifestyle-transactions">{category.transactions.slice(0, 6).map((transaction) => <li key={transaction.viewKey}><span><strong>{transaction.description}</strong><small>{transaction.date} · {transaction.accountName}{transaction.needsReview ? " · needs review" : ""}</small>{transaction.correction && <InlineTransactionCorrection correction={transaction.correction} />}</span><b className={transaction.spendingImpact < 0 ? "refund" : "spending"}>{transaction.spendingImpact < 0 ? "−" : ""}{formatMoney(Math.abs(transaction.spendingImpact), currency)}</b></li>)}</ul></section><section><p>Now</p><strong>{category.transactions.length} supporting transaction{category.transactions.length === 1 ? "" : "s"}</strong><small>{formatMoney(category.total, currency)} in the selected period.</small><PeriodSelector selected={period.key} /></section><section><p>Next</p><small>No future category activity is asserted without known obligations or strong recurrence evidence.</small></section></div>
+    {category.needsReview && <Link className="review-beacon" href="/review">Review these uncategorized transactions <span aria-hidden="true">↗</span></Link>}
+  </>;
+}
+const UnknownWorld = ({ title, heading, message }: { title: string; heading: string; message: string }) => <><p className="world-kicker">{title}</p><h2>{heading}</h2><div className="unknown-horizon"><span>Unknown</span><p>{message}</p></div></>;
 
-                  {isOpen && (
-                    <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                      {world.status === "unknown" ? (
-                        <p className="text-xs leading-5 text-slate-400">{world.reason}</p>
-                      ) : (
-                        accounts.map((account) => (
-                          <div key={account.id} className="rounded-xl bg-white/[0.035] p-3 text-xs">
-                            <div className="flex justify-between gap-3">
-                              <span className="truncate text-slate-300">{account.name}</span>
-                              <span className={account.type === "liability" ? "text-rose-300" : "text-emerald-300"}>
-                                {formatMoney(account.balance, money.currency)}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-slate-500">{account.institution}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-    </main>
-  );
+function RealWorldDetail({ title, heading, object, currency, manageFacts = false }: { title: string; heading: string; object: HomepageViewModel["home"]; currency: string; manageFacts?: boolean }) {
+  if (object.status === "unknown") return <><UnknownWorld title={title} heading={heading} message={object.message} />{manageFacts && <Link className="review-beacon" href="/facts">Add factual information <span aria-hidden="true">→</span></Link>}</>;
+  return <><p className="world-kicker">Person · {title} · Detail</p><h2>{heading}</h2><p className="world-provenance">{object.message}</p><dl className="account-facts">
+    <div><dt>Property value</dt><dd>{object.asset ? moneyLabel(object.asset.value, currency) : "Unknown"}</dd></div>
+    <div><dt>Outstanding</dt><dd>{object.financing ? moneyLabel(object.financing.balance, currency) : "Unknown"}</dd></div>
+    <div><dt>Institution</dt><dd>{object.financing?.institution ?? "Unknown"}</dd></div>
+    <div><dt>Effective date</dt><dd>{object.financing?.effectiveDate ?? object.asset?.effectiveDate ?? "Unknown"}</dd></div>
+    <div><dt>Equity</dt><dd>{moneyLabel(object.equity, currency)}</dd></div>
+  </dl>{manageFacts && <Link className="review-beacon" href="/facts">Update factual information <span aria-hidden="true">→</span></Link>}</>;
+}
+
+const nodeValue = (world: WorldKey, view: HomepageViewModel) => {
+  if (world === "cash") return moneyLabel(view.cash.total, view.currency);
+  if (world === "investments") return moneyLabel(view.investments.total, view.currency);
+  if (world === "liabilities") return moneyLabel(view.liabilities.total, view.currency);
+  if (world === "home") return view.home.asset ? moneyLabel(view.home.asset.value, view.currency) : view.home.financing ? "Financing known" : "Unknown";
+  if (world === "vehicle") return view.vehicle.financing ? "Financing known" : "Unknown";
+  if (world === "lifestyle") return moneyLabel(view.lifestyle.qualifyingSpending, view.currency);
+  return moneyLabel(view.cashflow.net, view.currency);
+};
+
+export default function FinancialHome({ view }: { view: HomepageViewModel }) {
+  const [selected, setSelected] = useState<WorldKey | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<HomepageAccount | null>(null);
+  const [selectedLifestyle, setSelectedLifestyle] = useState<string | null>(null);
+  const [selectedCashflow, setSelectedCashflow] = useState<CashflowChildKey | null>(null);
+  const [surfaceOpen, setSurfaceOpen] = useState(false);
+  const [travelling, setTravelling] = useState(false);
+  const beginTravel = (arrive?: () => void) => { setTravelling(true); window.setTimeout(() => { setTravelling(false); arrive?.(); }, 520); };
+  const selectedLifestyleCategory = selectedLifestyle ? view.lifestyle.categories.find((category) => category.label === selectedLifestyle) ?? null : null;
+  const selectWorld = (world: WorldKey) => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelected(world); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); };
+  const leaveWorld = () => { beginTravel(); setSelected(null); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); setSurfaceOpen(false); };
+  const leaveObject = () => { setSelectedAccount(null); setSelectedLifestyle(null); setSelectedCashflow(null); setSurfaceOpen(true); };
+  const accountWorld = selected === "cash" || selected === "investments" || selected === "liabilities" ? selected : null;
+  const worldAccounts = accountWorld ? view[accountWorld].accounts : [];
+  const depth = selectedAccount || selectedLifestyleCategory || selectedCashflow ? "object" : selected ? "world" : "person";
+  const accountTone = selected === "investments" ? "violet" : selected === "liabilities" ? "rose" : "mint";
+  const accountChildren: SpatialChild[] = worldAccounts.map((account) => ({ key: account.viewKey, label: account.displayName, value: moneyLabel(account.balance, view.currency), tone: accountTone, selected: selectedAccount?.viewKey === account.viewKey, select: () => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelectedAccount(account); } }));
+  const lifestyleChildren: SpatialChild[] = selected === "lifestyle" ? view.lifestyle.categories.slice(0, 5).map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: category.needsReview ? "mint" : "coral", selected: selectedLifestyleCategory?.viewKey === category.viewKey, select: () => { setSurfaceOpen(false); beginTravel(() => setSurfaceOpen(true)); setSelectedLifestyle(category.label); } })) : [];
+  const cashflowDefinitions: ReadonlyArray<{ key: CashflowChildKey; label: string; value: string; tone: string }> = [
+    { key: "money-in", label: "Money In", value: moneyLabel(view.cashflow.moneyIn, view.currency), tone: "mint" },
+    { key: "money-out", label: "Money Out", value: moneyLabel(view.cashflow.moneyOut, view.currency), tone: "coral" },
+    { key: "recent", label: "Recent", value: `${view.recentAndUpcoming.recent.length} events`, tone: "blue" },
+    { key: "upcoming", label: "Upcoming", value: `${view.recentAndUpcoming.upcoming.length} known + expected`, tone: "violet" },
+  ];
+  const cashflowChildren: SpatialChild[] = selected === "cashflow" ? cashflowDefinitions.map((child) => ({ ...child, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); setSurfaceOpen(true); } })) : [];
+  const spatialChildren = [...accountChildren, ...lifestyleChildren, ...cashflowChildren];
+  return <main className={`universe-shell depth-${depth} ${selected ? `world-${selected}` : ""} ${travelling ? "is-travelling" : ""}`}>
+    <div className="space-dust" aria-hidden="true" />
+    <header className="universe-header"><div><button type="button" className="universe-brand" onClick={leaveWorld} aria-label="Return to Net Worth">Vorvex</button><span>My financial universe · {view.snapshotDate ?? "snapshot unavailable"}</span></div><nav className="header-actions" aria-label="Financial data tools"><Link href="/facts">My data</Link><Link href="/statements">Add statements</Link><Link href="/review" className="header-review">Needs attention {view.lifestyle.unclassifiedCount > 0 && <span>{view.lifestyle.unclassifiedCount}</span>}</Link></nav></header>
+    <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Net Worth</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
+    <section className="universe-stage" aria-label="Your financial Worlds" data-depth={depth}>
+      <WebglAurora />
+      <button className="person-core" type="button" onClick={leaveWorld} aria-label="Return to your universe"><span>Net worth</span><strong>{moneyLabel(view.position.netWorth, view.currency)}</strong><small>Assets {moneyLabel(view.position.assets, view.currency)}<br />Liabilities {moneyLabel(view.position.liabilities, view.currency)}</small><em>Based on connected financial data</em></button>
+      {WORLD_META.map((world) => { const isParent = depth === "object" && selected === world.key; return <button key={world.key} type="button" onClick={isParent ? leaveObject : () => selectWorld(world.key)} aria-label={isParent ? `Return to ${world.label}` : undefined} aria-pressed={selected === world.key} className={`world-node ${world.position} tone-${world.tone} ${selected === world.key ? "is-selected" : ""}`}><i aria-hidden="true" /><WorldIcon world={world.key} /><span>{world.label}</span><strong>{nodeValue(world.key, view)}</strong></button>; })}
+      {selected && <div className="world-focus" aria-hidden="true"><i /><span>{WORLD_META.find((world) => world.key === selected)?.label}</span></div>}
+      {spatialChildren.map((child, index) => <button type="button" key={child.key} className={`child-object child-${index + 1} tone-${child.tone} ${child.selected ? "is-selected" : ""}`} onClick={child.select}><i aria-hidden="true" />{selected && <WorldIcon world={selected} />}<span>{child.label}</span><strong>{child.value}</strong></button>)}
+    </section>
+    {selected && (selectedAccount || selectedLifestyleCategory) && <IntelligenceRail view={view} world={selected} account={selectedAccount} category={selectedLifestyleCategory} />}
+    {selected && !surfaceOpen && <button type="button" className="open-activity" onClick={() => setSurfaceOpen(true)}>Open Past / Now / Next</button>}
+    {selected && surfaceOpen && <aside className="world-dock" aria-live="polite"><button className="close-surface" type="button" onClick={() => setSurfaceOpen(false)} aria-label="Close information surface">×</button><div className="dock-glow" aria-hidden="true" />{selectedLifestyleCategory && selected === "lifestyle"
+      ? <LifestyleDetail category={selectedLifestyleCategory} currency={view.currency} period={view.period} />
+      : selectedCashflow && selected === "cashflow"
+      ? <CashflowChildDetail child={selectedCashflow} view={view} />
+      : selectedAccount && (selected === "cash" || selected === "investments" || selected === "liabilities")
+      ? <AccountDetail account={selectedAccount} world={selected} view={view} />
+      : <WorldDetail world={selected} view={view} />}</aside>}
+    <footer className="universe-footer"><p>{view.coverage.message}</p><span>{view.period.startDate} — {view.period.endDate}</span></footer>
+  </main>;
 }

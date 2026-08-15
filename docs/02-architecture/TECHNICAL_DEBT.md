@@ -1,5 +1,12 @@
 # Technical Debt
 
+## Mission 2 accepted debt
+
+- Desjardins DCP and Canada Life retirement reports remain outside automated product ingestion. The Desjardins layout exposes reliable value and contribution decomposition, but has only two available periods. The Canada Life archive currently identifies its plan as an RPP while the canonical account is labelled PRPP; Vorvex must not silently equate them. Add provider-specific adapters only after account identity is explicitly reconciled.
+- Ten older TD investment reports and older TD transaction layouts remain fail-closed. Extend adapters only from characterized fixtures; do not weaken reconciliation to increase acceptance counts.
+- The local Founder installer can complete while macOS reports a transient LaunchAgent bootstrap error; a subsequent service kickstart works. Packaging lifecycle hardening is useful but remains secondary to product capability.
+- Managed in-app browser control cannot access localhost. Final desktop visual acceptance used a local-only headless browser render; direct Founder interaction remains the authoritative subjective quality check for motion feel.
+
 ## Purpose
 
 This document records engineering limitations and cleanup opportunities. Product ideas belong in the [Parking Lot](../04-decisions/PARKING_LOT.md), not here.
@@ -26,6 +33,66 @@ Technical debt is not automatically bad. Some debt is consciously accepted to sh
 ```
 
 ## Current Debt
+
+## TD Credit Card Layout Breadth
+
+- Date observed: 2026-08-08
+- Observed during: TD Credit Card PDF ingestion
+- Area: Provider adapters
+- Description: Parser v1 is validated against one real TD credit-card statement layout. Deterministic cross-account payment matching is now handled separately by the canonical relationship engine.
+- Current impact: The characterized layout imports automatically and preserves payment meaning, but changed layouts fail closed.
+- Risk if ignored: A bank layout change requires attention.
+- Suggested resolution: Characterize additional real statement variants before widening the adapter.
+- Preconditions: More sanitized statement variants.
+- Estimated urgency: Medium
+- Status: Open; payment-matching portion resolved by Action 14
+- Related files: `lib/financial-files/td-credit-card-pdf-parser.ts`, `lib/transactions/td-credit-card-normalization.ts`
+- Related branch or commit: `build/local-transaction-ingestion`
+
+## Drop-Folder Host Lifecycle and Filesystem Retention
+
+- Date observed: 2026-08-08
+- Observed during: Automatic bank-statement drop-folder ingestion
+- Area: Local process operations and privacy
+- Description: The LaunchAgent now owns one production server and the runtime owns one worker lifecycle. File deletion still cannot guarantee secure erasure from filesystem journals, snapshots, backups, synchronization services, or storage media.
+- Current impact: Daily Founder operation has one lifecycle owner. The acquisition folder should remain non-synchronized where residual retention is unacceptable.
+- Risk if ignored: Multiple application processes could duplicate work before database constraints resolve it, hot-reload integration could create unnecessary watchers, and deleted source bytes may remain in systems outside Vorvex's control.
+- Suggested resolution: Assess platform-specific retention before general deployment.
+- Preconditions: Approved local application packaging and OS deployment model.
+- Estimated urgency: High before persistent Founder deployment
+- Status: Lifecycle resolved by Action 15; filesystem-retention limitation remains open
+- Related files: `lib/statement-folder/worker.ts`, `lib/statement-folder/config.ts`, `docs/02-architecture/STATEMENT_DROP_FOLDER.md`
+- Related branch or commit: `build/local-transaction-ingestion`
+
+## Local Ingestion Key and Backup Operations
+
+- Date observed: 2026-08-08
+- Observed during: Durable local transaction ingestion
+- Area: Financial persistence security and recovery
+- Description: Transaction payloads use authenticated field-level encryption and Founder v1 now uses macOS Keychain custody. Key rotation, encrypted backup/export, and tested restore are not implemented. Indexed journal and identity metadata are not fully database-encrypted.
+- Current impact: Long-lived local use has protected key custody, but the database must not become the sole irreplaceable copy until recovery is tested.
+- Risk if ignored: Loss of the external key makes encrypted records unrecoverable; an unprotected backup may disclose journal metadata; one local database is not a resilient sole copy.
+- Suggested resolution: Add encrypted versioned export/backup, restoration tests, and a key-rotation plan before relying on the store as the sole durable Founder ledger. Re-evaluate SQLCipher only if the remaining metadata exposure is unacceptable.
+- Preconditions: Approved deployment location, retention posture, and recovery ownership.
+- Estimated urgency: High before persistent Founder deployment
+- Status: Keychain custody resolved by Action 15; recovery and full-database metadata protection remain open
+- Related files: `lib/persistence/field-encryption.ts`, `lib/persistence/local-ingestion-store.ts`, `docs/02-architecture/LOCAL_TRANSACTION_PERSISTENCE.md`
+- Related branch or commit: `build/local-transaction-ingestion`
+
+## Founder Runtime Packaging and Updates
+
+- Date observed: 2026-08-08
+- Observed during: Founder Production Readiness
+- Area: macOS distribution
+- Description: Founder v1 uses a reproducible repository-based installer, LaunchAgent, and small `.app` launcher. It is not code-signed, notarized, self-updating, or a public installer.
+- Current impact: A compatible Founder Mac needs Node.js 24+, installed dependencies, and the canonical repository for one-time installation. Ordinary use after installation needs no Terminal.
+- Risk if ignored: This is unsuitable for public customer distribution and updates remain an engineering operation.
+- Suggested resolution: Design a signed, notarized, versioned installer and safe update/rollback channel before external distribution.
+- Preconditions: Approved commercial distribution and update architecture.
+- Estimated urgency: Low for Founder v1; critical before public distribution
+- Status: Open
+- Related files: `scripts/install-founder-runtime.sh`, `packaging/`
+- Related branch or commit: `build/founder-production-readiness`
 
 ## Oversized Dashboard Component
 
@@ -146,3 +213,16 @@ Technical debt is not automatically bad. Some debt is consciously accepted to sh
 - Status: Mitigated
 - Related files: Dashboard implementation files
 - Related branch or commit: `prototype/functional-dashboard-v1`, `31c16052fa3cd221521bf5f01d0b3f7a7d0e5363`
+## Current Relationship Candidate Origination
+
+- Date observed: 2026-08-08
+- Observed during: Action 14 deterministic relationship matching
+- Area: Founder review workflow
+- Description: Loan, Loan Repayment, and Reimbursement candidates can be created through the explicit engine API but do not yet have a dedicated Founder-facing origination control.
+- Current impact: The Founder can review and decide these candidates once created, but cannot initiate one from the current minimal review page.
+- Risk if ignored: Explicit relationship support remains incomplete for cases that cannot be discovered safely.
+- Suggested resolution: Add a transaction-pair selection flow only when Founder/CTO approves that interaction.
+- Preconditions: Preserve exact canonical references, Unknown, and the no-fuzzy/no-automatic-reimbursement boundary.
+- Estimated urgency: Low
+- Status: Open
+- Related files: `lib/relationships/founder-relationship-service.ts`, `app/review/page.tsx`

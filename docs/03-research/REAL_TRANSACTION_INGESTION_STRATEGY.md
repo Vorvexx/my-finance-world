@@ -1,10 +1,12 @@
 # Real Transaction Ingestion Strategy
 
-**Status:** Approved architecture decision; no external provider approved or implemented
+**Status:** Historical research; structured-export-first recommendation superseded by current Founder source availability
 
 **Date:** 2026-08-08
 
 **Scope:** TD Canada Trust chequing and credit-card transactions first
+
+> **Current direction (2026-08-08):** The Founder’s current TD workflow provides monthly statements as PDFs. PDF is therefore the first implementation source. The provider-independent and local-first reasoning below remains useful, but CSV/OFX-first ordering, scheduled-inbox timing, and raw-file retention recommendations are not current authority. See [Secure PDF Intake and Structural Analysis](../02-architecture/PDF_INTAKE.md) and the [Engineering Operating Manual](../engineering/ENGINEERING_OPERATING_MANUAL.md).
 
 ## 1. Executive recommendation
 

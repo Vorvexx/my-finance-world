@@ -176,6 +176,6 @@ Escalate task and architecture questions to the CTO, implementation coordination
 
 ## Collaboration Rule
 
-Ideas compete on their merits; agents do not compete for authority. Any role may propose a better approach. The owner of the relevant decision reviews it according to the [hierarchy of authority](./ENGINEERING_PLAYBOOK.md#hierarchy-of-authority).
+Ideas compete on their merits; agents do not compete for authority. Any role may propose a better approach. The owner of the relevant decision reviews it according to the [authority hierarchy](../engineering/ENGINEERING_OPERATING_MANUAL.md#authority-hierarchy).
 
 Approved work then moves through the standard loop: founder goal, CTO specification, Build implementation and validation, CTO review, founder decision, coherent checkpoint, and documentation of durable learning.

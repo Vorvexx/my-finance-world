@@ -117,3 +117,13 @@ This document records durable learning from product work, engineering, workflow,
 - Decision or behaviour changed: Allow contextual repetition while enforcing one source of truth.
 - Where this should be applied: Domain modeling, queries, and interface composition.
 - Related files, branch, task, or commit: [Data Model](../02-architecture/DATA_MODEL.md)
+
+## 2026-08-08 — Statement Dates Require Source-Bound Year Evidence
+
+- Context: Production parsing of a sanitized real TD Chequing PDF.
+- What happened: The embedded statement-period text exposed month and day but no year; the PDF's creation metadata supplied a corroborating year and date close to the period end.
+- What we learned: A filename or the computer's current year is not reliable financial evidence, while tightly validated metadata inside the source can resolve an otherwise incomplete period.
+- Why it matters: A plausible but incorrect year would silently corrupt transaction identity, ordering, deduplication, and history.
+- Decision or behaviour changed: TD parser version 1 accepts an embedded year or, when it is absent, an exact PDF creation date no more than seven days after period end; otherwise it fails closed.
+- Where this should be applied: Statement parsers, import provenance, and date normalization.
+- Related files, branch, task, or commit: [Secure PDF Intake and Structural Analysis](../02-architecture/PDF_INTAKE.md), `td-chequing-pdf-v1`

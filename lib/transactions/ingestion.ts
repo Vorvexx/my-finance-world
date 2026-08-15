@@ -9,8 +9,15 @@ import type {
   WorldAttributionRule,
 } from "../../types/transactions.ts";
 
-const deduplicationKey = (transaction: ValidatedRawTransaction) =>
-  `${transaction.source}:${transaction.sourceRecordId}`;
+const deduplicationKey = (transaction: ValidatedRawTransaction) => {
+  const sourceIdentity = transaction.sourceRecordId
+    ? `source:${transaction.sourceRecordId}`
+    : `fingerprint:${transaction.fingerprint.version}:${transaction.fingerprint.value}`;
+  return `${transaction.source}:${transaction.accountId}:${sourceIdentity}`;
+};
+
+const canonicalTransactionId = (transaction: ValidatedRawTransaction) =>
+  `vorvex-transaction:${transaction.importId}:${transaction.accountId}:${transaction.fingerprint.version}:${transaction.fingerprint.value}`;
 
 const shouldReplaceDuplicate = (
   current: ValidatedRawTransaction,
@@ -30,8 +37,9 @@ const canonicalize = (
   rules: readonly WorldAttributionRule[],
 ): CanonicalTransaction => {
   const normalizedCounterparty = normalizeCounterparty(transaction.description);
+  const id = canonicalTransactionId(transaction);
   const attribution = attributeTransaction({
-    transactionId: transaction.id,
+    transactionId: id,
     description: transaction.description,
     normalizedCounterparty,
     corrections,
@@ -40,21 +48,27 @@ const canonicalize = (
   const updatedAt = transaction.sourceUpdatedAt ?? transaction.observedAt;
 
   return {
-    id: transaction.id,
+    id,
     accountId: transaction.accountId,
-    date: transaction.date,
+    transactionDate: transaction.transactionDate,
+    postedDate: transaction.postedDate,
     amount: transaction.amount,
     direction: transaction.direction,
+    currency: transaction.currency,
     rawDescription: transaction.description,
     normalizedCounterparty,
+    financialMeaning: transaction.financialMeaning,
     status: transaction.status,
+    relatedTransactionId: null,
     attribution,
     provenance: {
+      importId: transaction.importId,
       providerId: transaction.source,
       sourceRecordId: transaction.sourceRecordId,
       sourceKind: transaction.sourceKind,
       observedAt: transaction.observedAt,
       sourceUpdatedAt: transaction.sourceUpdatedAt,
+      fingerprint: transaction.fingerprint,
       deduplicationKey: deduplicationKey(transaction),
     },
     createdAt: transaction.observedAt,
@@ -89,7 +103,7 @@ export const ingestTransactions = (
   const rules = options.rules ?? defaultWorldAttributionRules;
   const transactions = [...unique.values()]
     .map((transaction) => canonicalize(transaction, corrections, rules))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => b.transactionDate.localeCompare(a.transactionDate) || b.updatedAt.localeCompare(a.updatedAt));
 
   return { transactions, duplicateCount };
 };

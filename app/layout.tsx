@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "My Finance World",
-  description: "A clear, human view of your financial life.",
+  title: "Vorvex Universe",
+  description: "Explore your financial world as one connected universe.",
 };
 
 export default function RootLayout({

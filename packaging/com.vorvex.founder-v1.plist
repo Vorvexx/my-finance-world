@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.vorvex.founder-v1</string>
+  <key>ProgramArguments</key><array><string>__NPM_PATH__</string><string>run</string><string>start:founder</string></array>
+  <key>WorkingDirectory</key><string>__REPOSITORY_PATH__</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>__NODE_BIN_PATH__:/usr/bin:/bin:/usr/sbin:/sbin</string><key>VORVEX_KEYCHAIN_HELPER</key><string>__KEYCHAIN_HELPER__</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ProcessType</key><string>Background</string>
+  <key>Umask</key><integer>63</integer>
+  <key>StandardOutPath</key><string>__LOG_ROOT__/runtime.log</string>
+  <key>StandardErrorPath</key><string>__LOG_ROOT__/runtime-error.log</string>
+</dict></plist>

@@ -10,7 +10,7 @@ const fromCents = (value: number) => value / 100;
 export const recentTransactions = (
   transactions: readonly CanonicalTransaction[],
   limit = 10,
-) => [...transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit);
+) => [...transactions].sort((a, b) => b.transactionDate.localeCompare(a.transactionDate)).slice(0, limit);
 
 export const pendingTransactions = (transactions: readonly CanonicalTransaction[]) =>
   transactions.filter((transaction) => transaction.status === "pending");
@@ -31,7 +31,7 @@ export const transactionTotalsForPeriod = (
   endDate: string,
 ): TransactionPeriodTotals => {
   const inPeriod = transactions.filter(
-    (transaction) => transaction.date >= startDate && transaction.date <= endDate,
+    (transaction) => transaction.transactionDate >= startDate && transaction.transactionDate <= endDate,
   );
   const inflowCents = inPeriod
     .filter((transaction) => transaction.direction === "inflow")

@@ -8,14 +8,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 Before meaningful product or engineering work, read:
 
+- `docs/engineering/ENGINEERING_OPERATING_MANUAL.md`
 - `docs/00-company/MISSION.md`
 - `docs/00-company/PRODUCT_PRINCIPLES.md`
 - `docs/VISION.md`
 - `docs/02-architecture/DATA_MODEL.md`
-- `docs/06-ai/ENGINEERING_PLAYBOOK.md`
 - Relevant files in `docs/04-decisions/` and `docs/05-roadmap/`
 
-Follow the authority, task, Git-safety, validation, and prototype-first rules in the Engineering Playbook. Do not duplicate the permanent documents here.
+The Engineering Operating Manual is the permanent authority for engineering workflow, Git safety, validation, documentation, and checkpoint practice. The earlier Engineering Playbook is preserved as historical context and must not be treated as current operating authority. Do not duplicate the permanent documents here.
 
 Out-of-scope findings must be recorded rather than implemented:
 

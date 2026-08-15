@@ -1,5 +1,9 @@
 # Vorvex Engineering Playbook
 
+**Status:** Superseded historical guidance
+
+This playbook is preserved as historical context. The [Engineering Operating Manual](../engineering/ENGINEERING_OPERATING_MANUAL.md) is the permanent authority for current engineering work. Where this playbook differs from the manual, follow the manual.
+
 ## Purpose
 
 This playbook defines how human and AI contributors execute engineering work at Vorvex. It keeps contributors aligned with the company direction while enabling fast, independent execution inside an approved task.

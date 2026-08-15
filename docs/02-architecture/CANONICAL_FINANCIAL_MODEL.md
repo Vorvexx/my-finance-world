@@ -51,11 +51,11 @@ The first provider reads the ignored local backup at runtime. When the file is a
 
 ## Validation Invariants
 
-- Assets: $115,501.51
-- Liabilities: $2,929.70
-- Net worth: $112,571.81
-- Account count: 7
+- Assets and liabilities are aggregated independently using integer cents.
+- Net worth is derived as assets minus liabilities.
+- Statement balances never silently replace canonical account balances.
 - All recovered accounts must match the typed runtime schema before the model is created.
+- Founder-specific values and account counts remain private local validation evidence and are not recorded in source control.
 
 ## Remaining Unknowns
 

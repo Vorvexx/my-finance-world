@@ -4,6 +4,16 @@
 
 This log records approved, durable product, architecture, and operating decisions. It explains why a decision exists so future contributors do not reopen it accidentally. New evidence may change a decision through a later dated entry; earlier reasoning remains part of the record.
 
+## 2026-08-08 — Founder Production Runtime v1 Is macOS-Only and Local
+
+- Date: 2026-08-08
+- Decision: Founder v1 uses one macOS user, macOS Keychain, owner-only Application Support state, one LaunchAgent runtime, and a Next.js interface bound only to `127.0.0.1`.
+- Context: Existing ingestion, review, learning, relationship, and homepage engines required a secure daily operating boundary.
+- Rationale: This is the smallest approved architecture that provides local secret custody, durable state, automatic statement processing, and a non-developer launch experience without inventing cloud or multi-user security.
+- Consequences: No plaintext key fallback, LAN listener, telemetry, cloud, public installer, or cross-platform support is part of v1. Missing Keychain access blocks existing data without replacement-key generation.
+- Status: Approved and implemented
+- Related documents, branch, or commit: [Founder Production Runtime v1](../02-architecture/FOUNDER_PRODUCTION_RUNTIME.md), `build/founder-production-readiness`
+
 ## 2026-08-03 — The Person Is the Centre
 
 - Date: 2026-08-03

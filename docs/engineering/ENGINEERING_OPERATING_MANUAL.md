@@ -192,6 +192,26 @@ Time is part of the model. Preserve meaningful Events, revisions, provenance, an
 
 ## 5. Engineering principles
 
+### Lean execution default
+
+Product progress is the default. Engineering work should create user value, enable the next milestone, protect an important capability, or remove a real blocker. Use this decision test before significant investment:
+
+> **Does this work materially improve the product, protect something important, or enable the next milestone?**
+
+If not, normally do not do it; if uncertain, challenge it first. For the Founder-prototype phase, aim directionally for 80% building and 20% validation, security, and documentation, adjusting when consequences justify more or less rigor.
+
+Apply validation proportionally to risk. Normal UI work usually needs relevant tests, typecheck, build or lint where appropriate, and practical interaction validation—not database forensics or exhaustive security matrices. Financial calculations require reconciliation and correctness evidence; persistence changes require migration and integrity testing; statement ingestion requires parser, deduplication, privacy, and failure-path coverage; credentials, encryption, and external financial integrations require deeper security review. Security remains non-negotiable where financial truth, private data, credentials, destructive operations, external integrations, or source durability face credible risk.
+
+Engineering has authority over routine, reversible implementation choices such as file and component structure, internal APIs, test organization, naming, minor refactoring, safe dependency choices, development tooling, and equivalent techniques. Do not escalate those decisions. Escalate choices that materially affect product vision or experience, financial truth, privacy or security architecture, irreversible or expensive architecture, external financial integrations, meaningful operating cost, major scope, or destructive data operations.
+
+Objectives and boundaries are authoritative; prescribed mechanics may be challenged. Prefer the smallest safe solution, and challenge redundant validation, speculative architecture, unnecessary abstraction, excessive documentation, and work that does not advance the milestone—even when the instruction originates with the Founder or CXO. Build for current requirements with sensible extension boundaries: simple, correct, and extensible beats generalized, sophisticated, and hypothetical.
+
+Document durable decisions, models, security boundaries, meaningful debt, and lessons future engineers need—not routine activity already clear in code, tests, and Git history. For product milestones, make the improvement visible and usable whenever practical.
+
+Default cadence:
+
+> **Understand briefly → Challenge if necessary → Build → Validate proportionally → Commit → Preserve → Recommend next action**
+
 ### Challenge assumptions with evidence
 
 Do not challenge for ceremony. Challenge when the requested direction is materially unsupported, stale, unsafe, contradictory, needlessly expensive, or likely to create avoidable rework. State:
@@ -413,6 +433,18 @@ Provider-independent UI and services
 
 The application must build and run from a clean clone without personal data. When no private source exists, the product reports that state honestly rather than substituting fake values.
 
+### Founder-authorized financial-data locations
+
+Explicit Founder authorization must precede every access to a financial document. A file's presence on the Founder’s device is not authorization.
+
+- Vorvex, Engineering, human contributors, AI agents, scripts, tests, and diagnostic tooling may access financial documents only inside a location the Founder explicitly authorized for the current workflow or a specific file or folder the Founder explicitly identified for a specific task.
+- The current authorized statement-ingestion location is `/Users/inder/Documents/Vorvex Bank Statements`. Engineering tooling follows the same boundary as the product.
+- Never search, enumerate, inspect, parse, characterize, copy, hash, or otherwise access financial documents in Desktop, Downloads, Documents generally, iCloud, external drives, historical archives, or other user directories without explicit task-specific Founder authorization naming the target.
+- Do not infer authorization from filesystem visibility, existing macOS permissions, prior access, relevance, convenience, or a broad task such as reconciliation, backfill, debugging, or validation.
+- Do not request or broaden macOS filesystem permissions to locate financial sources. If authorized evidence is absent from the configured location, stop and ask the Founder to place it there or explicitly identify the narrow target.
+- The normal local workflow is: the Founder manually places statements in the authorized inbox; Vorvex processes only that inbox; canonical data is updated locally. Future API access must also begin with explicit Founder authorization.
+- Preserve existing canonical data and provenance when correcting an authorization boundary. Do not reopen source documents merely to reconstruct provenance unless the Founder explicitly authorizes that access.
+
 ### Credentials and secrets
 
 - Vorvex must not collect bank credentials when a provider-hosted or bank-hosted authorization flow exists.
@@ -521,16 +553,17 @@ Local snapshots, manual entry, CSV, OFX/QFX, PDF, future APIs, and future databa
 The first real transaction source is the privacy-first local TD statement inbox:
 
 - TD chequing and TD credit card first;
-- CSV implemented first;
-- OFX/QFX validated as preferred structured formats when quality is proven;
-- PDF limited to historical fallback;
-- scheduled inbox scan is authoritative;
-- manual processing is always available;
-- filesystem watching is only a responsiveness hint;
+- Founder authorization is limited to the explicitly configured inbox; neither product code nor Engineering tooling may discover candidate financial files elsewhere;
+- PDF implemented first because it is the available Founder workflow;
+- embedded-text extraction is evaluated before any OCR decision;
+- CSV and OFX/QFX remain future adapters if current TD access makes them available;
+- manual local processing is implemented before scheduling or filesystem watching;
+- successful imports delete the original source by default after verified commit;
+- raw PDF bytes and extracted text remain ephemeral and never enter external AI services;
 - Plaid/Flinks are deferred until automatic refresh is justified;
 - Canadian consumer-driven banking is the preferred long-term direction when production coverage and accredited intermediaries are proven.
 
-See [Real Transaction Ingestion Strategy](../03-research/REAL_TRANSACTION_INGESTION_STRATEGY.md).
+See [Secure PDF Intake and Structural Analysis](../02-architecture/PDF_INTAKE.md). The [Real Transaction Ingestion Strategy](../03-research/REAL_TRANSACTION_INGESTION_STRATEGY.md) preserves the earlier structured-export-first research and its now-superseded availability assumption.
 
 ### Future extensibility
 
@@ -584,6 +617,8 @@ Checkpoint before major experiments, risky migrations, broad refactors, or archi
 - free of private and generated data;
 - recoverable by branch and commit hash;
 - documented enough to understand its purpose and limitations.
+
+A milestone checkpoint is not durable until it exists outside the working repository. After committing, preserve it in a second verified location—for example, a pushed protected branch or a Git bundle stored on separate durable media—and record the commit hash. Verify that the second copy contains the commit before treating the milestone as recoverable. A local branch, worktree, or clone on the same storage device is not a sufficient backup.
 
 Do not rewrite protected historical checkpoints. Later improvements use new commits or branches.
 

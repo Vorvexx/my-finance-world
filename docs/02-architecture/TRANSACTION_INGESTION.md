@@ -22,53 +22,80 @@ UI, Worlds, reports, insights, and future assistants
 
 The UI never consumes provider formats. The canonical financial model owns the transaction ledger, even when it is empty.
 
+The first available TD source is PDF. PDFs enter through the provider-independent [Secure PDF Intake and Structural Analysis](./PDF_INTAKE.md) boundary before any TD-specific interpretation. CSV and OFX/QFX remain future adapters; PDF details do not enter the canonical transaction model.
+
+The production `td-chequing-pdf-v2` and `td-credit-card-pdf-v2` adapters convert validated TD sources into reconciled provider-specific facts. Their normalization boundaries translate activity into the same canonical transaction contract and atomically commit through [Local Transaction Persistence](./LOCAL_TRANSACTION_PERSISTENCE.md). Credit-card statement-level payment facts remain separate from transactions. No PDF field has been added to `CanonicalTransaction`.
+
+The [Automatic Bank Statement Drop Folder](./STATEMENT_DROP_FOLDER.md) is the first production orchestration path. It detects stable local files, classifies document structure, selects a provider adapter, verifies an approved canonical account mapping, and invokes this same canonical boundary. Supported automatically: characterized TD Chequing PDF v2 statements, including a non-financial trailing page, and TD Credit Card PDF v2 statements with validated statement-page totals. No other bank-statement route is implied.
+
+For liability accounts, purchases, interest, and fees are outflows that increase debt; payments, refunds, and other credits are inflows that reduce debt. A credit-card payment is not categorized as spending. Cross-account payment matching is intentionally deferred: `relatedTransactionId` remains `null` until a later deterministic matcher can link the card payment to its chequing-side transfer without changing either transaction's identity.
+
 ## Canonical Record
 
 A canonical transaction preserves immutable financial facts and evidence:
 
-- Unique ID and account relationship
-- Date, positive amount, and explicit inflow/outflow direction
+- Vorvex-controlled ID and account relationship
+- Transaction date, optional posted date, positive amount, explicit inflow/outflow direction, and currency
 - Posted or pending status
 - Original raw description
 - Normalized counterparty
-- Category and optional World relationship
-- Provider, source kind, source record ID, timestamps, and deduplication key
+- Constrained financial meaning
+- Nullable category and optional World relationship
+- Import ID, provider, source kind, optional provider record ID, versioned fingerprint, timestamps, and deduplication key
+- Optional related Vorvex transaction ID
 - Attribution method, rule, confidence, and correction timestamp
 
-Raw descriptions remain unchanged. Normalization creates a separate value; it never rewrites evidence.
+For PDF imports, raw descriptions are limited to the whitespace-normalized description within a validated transaction row; unrelated page context is never retained. Normalization creates a separate value and never rewrites that evidence. Both values are encrypted in the local store.
+
+### Identity and import provenance
+
+The canonical transaction ID is created and controlled by Vorvex. A provider record ID is separate evidence, is scoped to its provider and account, and may be absent. Vorvex never promotes a provider ID into canonical identity or fabricates one when a structured export does not supply it.
+
+Every transaction records the `importId` for the ingestion event that first created it without embedding the complete import record. TD PDF rows use the documented versioned fingerprint and Vorvex-controlled stable ID from [Local Transaction Persistence](./LOCAL_TRANSACTION_PERSISTENCE.md); later overlapping imports link to the existing record rather than changing its identity.
+
+### Financial meaning and category
+
+Financial meaning records transaction mechanics or economic interpretation. The initial values are expense, income, refund, reversal, fee, interest, credit-card purchase, credit-card payment, transfer, cash withdrawal, cash deposit, and unknown.
+
+Category is separate contextual classification. It may be `null`: transfers and credit-card payments are not spending categories, and an unknown transaction must not receive an artificial `Unclassified` category. Existing attribution rules and user corrections assign category and optional World context without changing financial meaning.
+
+### Relationship capability
+
+`relatedTransactionId` may reference one other canonical Vorvex transaction. It is initially `null` and exists only to preserve a minimum future path for transfer, reversal, repayment, and related-event matching. Matching logic, multi-record relationships, receivables, reimbursements, and personal-loan objects are not implemented.
 
 ## Provider Contract
 
-A provider only loads raw records. It does not calculate totals, normalize descriptions, classify activity, or shape UI output. Future manual entry, API, CSV, PDF, or database adapters must return the raw transaction contract and use the same ingestion function.
+A provider only loads raw records. It does not calculate totals, normalize descriptions, classify activity, or shape UI output. Future manual entry, API, CSV, PDF, or database adapters must return the raw transaction contract and use the same ingestion function. Imported records require resolved currency and import identity; adapters must not silently default currency or invent provider transaction IDs.
 
 The initial local synthetic provider exists only for development and tests. It is deliberately not registered in the production financial-model loader, so synthetic activity cannot appear as personal history.
 
 ## Validation and Privacy
 
-Validation rejects missing identifiers, malformed dates or timestamps, non-positive amounts, unknown directions, unknown statuses, and unsupported source kinds. No private transaction data is present in this checkpoint. Future private providers must remain outside tracked source files and preserve raw provenance locally.
+Validation rejects missing Vorvex-controlled import/account identity, malformed dates or timestamps, unresolved currency, invalid financial meaning, missing fingerprint evidence, non-positive amounts, unknown directions, unknown statuses, and unsupported source kinds. A provider record ID and posted date may legitimately be null. No private transaction data is present in this checkpoint. Future private providers must remain outside tracked source files and preserve minimized provenance locally.
 
 The test suite uses Node's native TypeScript execution. The repository therefore declares Node 24 or newer as an explicit runtime requirement.
 
 ## Deduplication
 
-The primary deduplication key is `provider ID + source record ID`. This reflects the source system's identity instead of guessing from merchant, amount, and date. When the same key appears more than once:
+The in-memory deduplication key is scoped by provider and account. It uses the provider record ID when present and otherwise uses the versioned transaction fingerprint. When the same key appears more than once:
 
 1. A posted record replaces its pending version.
 2. Otherwise, the version with the newest source-updated or observed timestamp wins.
 3. The ledger reports the number of duplicate inputs it resolved.
 
-Cross-provider duplicate detection is intentionally deferred because similar-looking transactions can be legitimate. It should require explicit reconciliation evidence.
+The durable store handles completed-file and TD fingerprint deduplication, including overlapping statements and occurrence ordinals for legitimate identical-looking rows. Cross-provider matching remains deferred because similar-looking transactions can be legitimate and no approved reconciliation evidence exists.
 
-## World Attribution
+## Human review and World attribution
 
-Attribution is enrichment, not a mutation of transaction facts. Precedence is:
+Attribution is enrichment, not a mutation of transaction facts. The durable [Human Review and Continuous Learning](./HUMAN_REVIEW_AND_LEARNING.md) boundary establishes precedence as:
 
 1. User correction
-2. Deterministic rule
-3. Future AI classification
-4. Unclassified
+2. Explicit user-created rule
+3. User-confirmed learned rule
+4. Deterministic engineering rule
+5. Unknown
 
-Rules currently demonstrate Home (mortgage and hydro), Vehicle (fuel), Income (salary), and Investments (contributions). User corrections are separate records and win without deleting the prior evidence. Future AI output must use the same attribution shape, identify its method, and expose confidence; AI is not implemented here.
+Rules currently demonstrate Home (mortgage and hydro), Vehicle (fuel), Income (salary), and Investments (contributions). User corrections are separate evidence and win without deleting prior evidence. Conflicting rules and insufficient evidence remain Unknown and request human confirmation. No AI rule source exists.
 
 ## Derived Services
 

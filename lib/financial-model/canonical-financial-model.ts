@@ -7,7 +7,7 @@ import type {
   NetWorthSummary,
   RawFinancialSnapshot,
 } from "@/types/finance";
-import { emptyTransactionLedger } from "@/lib/transactions/ingestion";
+import { emptyTransactionLedger } from "../transactions/ingestion.ts";
 
 const ACCOUNT_TYPES = new Set(["asset", "liability"]);
 const ACCOUNT_GROUPS = new Set<LegacyAccountGroup>([
@@ -102,8 +102,12 @@ const createSnapshot = (
         status: "known",
         accountIds: accounts.filter((account) => account.group === "debts").map((account) => account.id),
       },
-      home: { status: "unknown", reason: "No Home records have been loaded." },
-      vehicle: { status: "unknown", reason: "No Vehicle asset value has been loaded." },
+      home: accounts.some((account) => account.group === "property")
+        ? { status: "known", accountIds: accounts.filter((account) => account.group === "property").map((account) => account.id) }
+        : { status: "unknown", reason: "No Home records have been loaded." },
+      vehicle: accounts.some((account) => account.id === "founder-vehicle-asset")
+        ? { status: "known", accountIds: accounts.filter((account) => account.id === "founder-vehicle-asset").map((account) => account.id) }
+        : { status: "unknown", reason: "No Vehicle asset value has been loaded." },
       income: { status: "unknown", reason: "No income records have been loaded." },
       upcoming: { status: "unknown", reason: "No upcoming-event records have been loaded." },
       future: { status: "unknown", reason: "Future Worlds have not been recorded." },
