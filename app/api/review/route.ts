@@ -13,7 +13,18 @@ export async function POST(request: Request) {
     const body = await request.json() as Record<string, unknown>;
     const actionToken = text(body.actionToken);
     const choice = text(body.choice) as FounderReviewChoice;
-    if (!actionToken || !["classify", "keep-unknown", "ignore", "review-later"].includes(choice)) return NextResponse.json({ message: "That review action is not valid." }, { status: 400 });
+    const actionTokens = Array.isArray(body.actionTokens) ? body.actionTokens.filter((value): value is string => typeof value === "string" && value.length > 0) : [];
+    if ((!actionToken && actionTokens.length === 0) || !["classify", "keep-unknown", "ignore", "review-later"].includes(choice)) return NextResponse.json({ message: "That review action is not valid." }, { status: 400 });
+    if (choice === "classify" && actionTokens.length > 0) {
+      const saved = withReviewRuntime(({ service }) => service.saveBulk(actionTokens, {
+        financialMeaning: text(body.financialMeaning) as FinancialMeaning, category: text(body.category) || null,
+        world: (text(body.world) || null) as MoneyWorldKey | null, userPhrase: text(body.userPhrase) || null,
+      }));
+      if (!saved) return NextResponse.json({ message: "Review could not be saved." }, { status: 503 });
+      appendSafeAuditEvent({ at: new Date().toISOString(), event: "review-saved", authority: "founder", source: "local-ui", reason: `Founder classified ${saved.resolvedCount} explicitly selected transactions.` });
+      revalidatePath("/");
+      return NextResponse.json({ message: `${saved.resolvedCount} transaction${saved.resolvedCount === 1 ? "" : "s"} categorized as ${text(body.world) || "financial activity"} · ${text(body.category) || text(body.financialMeaning)}`, undoToken: saved.undoToken, resolvedCount: saved.resolvedCount });
+    }
     const saved = withReviewRuntime(({ service }) => service.save({
       actionToken,
       choice,

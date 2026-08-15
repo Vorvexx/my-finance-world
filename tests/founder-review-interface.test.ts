@@ -130,22 +130,23 @@ test("recurring merchant groups lead value-only groups and expose review evidenc
     assert.equal(queue.items[0].direction, "outflow");
     assert.deepEqual(queue.items[0].accountNames, ["Everyday account"]);
     assert.equal(queue.items[0].representativeTransactions.length, 3);
-    assert.deepEqual(queue.items[0].representativeTransactions[0], {
+    assert.equal(typeof queue.items[0].representativeTransactions[0].actionToken, "string");
+    assert.deepEqual({ ...queue.items[0].representativeTransactions[0], actionToken: undefined }, {
+      actionToken: undefined,
       date: "2099-07-25", amount: 10, accountName: "Everyday account",
       description: "WEEKLY MERCHANT LOCATION DETAIL", direction: "outflow",
     });
   } finally { await context.cleanup(); }
 });
 
-test("review UI presents grouped evidence and all three Founder choices", async () => {
+test("review UI presents one filterable bulk workspace with explicit selection and Undo", async () => {
   const [page, form] = await Promise.all([
     readFile(new URL("../app/review/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../components/review-decision-form.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/bulk-review-workspace.tsx", import.meta.url), "utf8"),
   ]);
-  for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time"])
+  for (const phrase of ["Review unresolved transactions", "Only checked transactions will change", "BulkReviewWorkspace"])
     assert.equal(page.includes(phrase), true, phrase);
-  for (const phrase of ["Confirm", "Only this transaction", "Review later", "Undo"]) assert.equal(form.includes(phrase), true, phrase);
-  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "New category", "review-world-object", "Inspect affected transactions", "selectedIndexes"])
+  for (const phrase of ["Search merchant or description", "All accounts", "Inflow and outflow", "World, category or meaning", "Select all visible", "Clear selection", "Inspect exactly what will change", "Choose a World", "+ New", "Cancel", "Confirm", "Undo"])
     assert.equal(form.includes(phrase), true, phrase);
 });
 
@@ -157,7 +158,9 @@ test("pending and recent reviews expose canonical transaction context with poste
     const names = new Map([["private-account", "TD Chequing Account"]]);
     const queue = context.service.listPending(FIRST, [source], names);
     if (queue.status !== "available") assert.fail("queue unavailable");
-    assert.deepEqual(queue.items[0].representativeTransactions[0], {
+    assert.equal(typeof queue.items[0].representativeTransactions[0].actionToken, "string");
+    assert.deepEqual({ ...queue.items[0].representativeTransactions[0], actionToken: undefined }, {
+      actionToken: undefined,
       date: "2099-08-07", amount: 24.5, accountName: "TD Chequing Account",
       description: "SYNTHETIC CORNER CAFE", direction: "outflow",
     });
@@ -167,6 +170,30 @@ test("pending and recent reviews expose canonical transaction context with poste
       description: "SYNTHETIC CORNER CAFE", date: "2099-08-07", accountName: "TD Chequing Account",
       amount: 24.5, direction: "outflow", currency: "CAD",
     });
+  } finally { await context.cleanup(); }
+});
+
+test("bulk classification changes only explicit unrelated rows, creates no rule, and undoes exactly", async () => {
+  const context = await fixture();
+  try {
+    const sources = [
+      { ...transaction("bulk-a"), rawDescription: "MERCHANT A", normalizedCounterparty: "MERCHANT A" },
+      { ...transaction("bulk-b"), rawDescription: "MERCHANT B", normalizedCounterparty: "MERCHANT B" },
+      { ...transaction("bulk-c"), rawDescription: "MERCHANT C", normalizedCounterparty: "MERCHANT C" },
+    ];
+    context.store.evaluateTransactions(sources, FIRST.toISOString());
+    const queue = context.service.listPending(FIRST, sources);
+    if (queue.status !== "available") assert.fail("queue unavailable");
+    const tokens = queue.items.filter((item) => item.description !== "MERCHANT C").map((item) => item.representativeTransactions[0].actionToken);
+    const saved = context.service.saveBulk(tokens, { financialMeaning: "expense", category: "Shopping", world: "cash" }, LATER);
+    assert.equal(saved.resolvedCount, 2);
+    assert.equal(context.store.listRules().length, 0);
+    assert.equal(context.store.listReviewItems("resolved").length, 2);
+    assert.equal(context.store.listReviewItems("pending").length, 1);
+    context.service.undo(saved.undoToken, new Date("2099-08-08T12:02:00.000Z"));
+    assert.equal(context.store.listReviewItems("resolved").length, 0);
+    assert.equal(context.store.listReviewItems("pending").length, 3);
+    assert.equal(context.store.listRules().length, 0);
   } finally { await context.cleanup(); }
 });
 

@@ -163,6 +163,7 @@ export class FounderReviewService {
         const matched = items.flatMap((candidate) => transactionById.get(candidate.transactionId) ?? []);
         const reviewDate = (transaction: CanonicalTransaction) => transaction.transactionDate?.trim() || transaction.postedDate?.trim() || null;
         const ordered = [...matched].sort((left, right) => (reviewDate(right) ?? "").localeCompare(reviewDate(left) ?? ""));
+        const itemByTransactionId = new Map(items.map((candidate) => [candidate.transactionId, candidate]));
         return {
           actionToken: sealReviewReference(items.map((candidate) => candidate.id), this.#key, now), description: item.normalizedCounterparty || item.description,
           currentFinancialMeaning: item.currentFinancialMeaning, currentCategory: item.currentCategory,
@@ -173,6 +174,7 @@ export class FounderReviewService {
           accountNames: [...new Set(matched.map((transaction) => accountNames.get(transaction.accountId) ?? "Account"))],
           direction: matched[0]?.direction ?? "unknown", recurring: isRecurring(matched),
           representativeTransactions: ordered.map((transaction) => ({
+            actionToken: sealReviewReference([itemByTransactionId.get(transaction.id)!.id], this.#key, now),
             date: reviewDate(transaction), amount: transaction.amount,
             accountName: accountNames.get(transaction.accountId) ?? "Account", description: transaction.rawDescription,
             direction: transaction.direction,
@@ -211,6 +213,24 @@ export class FounderReviewService {
         return this.#store.resolveReviewSubset(indexes.map((index) => reviewIds[index]), decision, now.toISOString(), input.userPhrase?.trim() || null);
       }
       return this.#store.resolveReview(reviewId, decision, now.toISOString(), input.userPhrase?.trim() || null);
+    } catch (error) {
+      if (error instanceof FounderReviewServiceError) throw error;
+      if (error instanceof ReviewLearningError) throw new FounderReviewServiceError("INVALID_ACTION");
+      throw new FounderReviewServiceError("REVIEW_UNAVAILABLE");
+    }
+  }
+
+  saveBulk(actionTokens: readonly string[], classification: { financialMeaning: FinancialMeaning; category: string | null; world: MoneyWorldKey | null; userPhrase?: string | null }, now = new Date()) {
+    if (actionTokens.length === 0 || actionTokens.length > 2_000 || !MEANINGS.has(classification.financialMeaning)
+      || (classification.world && !WORLDS.has(classification.world)) || (classification.category && classification.category.length > 80)) throw new FounderReviewServiceError("INVALID_ACTION");
+    const reviewIds = [...new Set(actionTokens.flatMap((token) => {
+      const ids = unsealReviewReference(token, this.#key, now);
+      if (ids.length !== 1) throw new FounderReviewServiceError("INVALID_ACTION");
+      return ids;
+    }))];
+    try {
+      const saved = this.#store.resolveReviewSubset(reviewIds, { kind: "classify", financialMeaning: classification.financialMeaning, category: classification.category, world: classification.world }, now.toISOString(), classification.userPhrase?.trim() || null);
+      return { ...saved, undoToken: sealReviewReference(reviewIds, this.#key, now) };
     } catch (error) {
       if (error instanceof FounderReviewServiceError) throw error;
       if (error instanceof ReviewLearningError) throw new FounderReviewServiceError("INVALID_ACTION");

@@ -121,7 +121,7 @@ test("Foundation v1 freezes one object grammar and continuous teaching flow", as
   assert.match(styles, /world-node>svg,.child-object>svg \{ position:static; order:2/);
   assert.match(styles, /world-node>strong,.child-object>strong \{ order:3/);
   assert.match(styles, /max-height:34svh/);
-  assert.match(reviewPage, /These decisions affect \$\{affectedTransactions\} transactions/);
+  assert.match(reviewPage, /Only explicitly selected transactions will change/);
   assert.match(reviewPage, /relationshipQueue\.items\.length > 0/);
   assert.doesNotMatch(reviewPage, /Relationship queue is clear|pending relationship candidates/);
   assert.match(reviewForm, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
