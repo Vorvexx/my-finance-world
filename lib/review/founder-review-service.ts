@@ -218,9 +218,22 @@ export class FounderReviewService {
   }
 
   correctionForTransaction(transaction: CanonicalTransaction, now = new Date()) {
-    const item = this.#store.listReviewItems(null).find((candidate) => candidate.transactionId === transaction.id && candidate.status === "resolved");
-    if (!item || this.#store.reviewDecision(item.id)?.kind !== "classify") return null;
-    return { actionToken: sealReviewReference([item.id], this.#key, now), suggestions: suggestionsFor(item, [transaction], this.#store.listLanguageAliases()) };
+    return this.correctionsForTransactions([transaction], now).get(transaction.id) ?? null;
+  }
+
+  correctionsForTransactions(transactions: readonly CanonicalTransaction[], now = new Date()) {
+    const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+    const aliases = this.#store.listLanguageAliases();
+    const corrections = new Map<string, { actionToken: string; suggestions: readonly BrowserReviewSuggestion[] }>();
+    for (const item of this.#store.listReviewItems("resolved")) {
+      const transaction = transactionById.get(item.transactionId);
+      if (!transaction || this.#store.reviewDecision(item.id)?.kind !== "classify") continue;
+      corrections.set(transaction.id, {
+        actionToken: sealReviewReference([item.id], this.#key, now),
+        suggestions: suggestionsFor(item, [transaction], aliases),
+      });
+    }
+    return corrections;
   }
 
   correct(actionToken: string, classification: { financialMeaning: FinancialMeaning; category: string | null; world: MoneyWorldKey | null }, now = new Date()) {

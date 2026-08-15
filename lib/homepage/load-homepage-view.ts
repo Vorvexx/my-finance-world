@@ -23,10 +23,9 @@ export const loadHomepageView = async ({ asOfDate, periodKey }: { asOfDate?: str
   const relationshipReadModel = reviewedTransactions ? withRelationshipRuntime(({ store }) =>
     applyRelationshipSemantics(reviewedTransactions, store.listRelationships()))
     ?? { transactions: reviewedTransactions, suppressedActivityTransactionIds: new Set<string>() } : null;
-  const corrections = relationshipReadModel ? withReviewRuntime(({ service }) => new Map(relationshipReadModel.transactions.flatMap((transaction) => {
-    const correction = service.correctionForTransaction(transaction);
-    return correction ? [[transaction.id, correction] as const] : [];
-  }))) ?? new Map() : new Map();
+  const corrections = relationshipReadModel
+    ? withReviewRuntime(({ service }) => service.correctionsForTransactions(relationshipReadModel.transactions)) ?? new Map()
+    : new Map();
   return deriveHomepageView({
     model,
     transactions: relationshipReadModel?.transactions ?? null,
