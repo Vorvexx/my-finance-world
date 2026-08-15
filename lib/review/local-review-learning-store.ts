@@ -353,7 +353,7 @@ export class LocalReviewLearningStore {
     return this.#createReview(transaction, reason, createdAt, relationshipKind);
   }
 
-  evaluateTransaction(transaction: CanonicalTransaction, evaluatedAt: string): ClassificationOutcome {
+  evaluateTransaction(transaction: CanonicalTransaction, evaluatedAt: string, rules = this.listRules()): ClassificationOutcome {
     assertTimestamp(evaluatedAt);
     if (transaction.attribution.method === "user-correction") {
       return {
@@ -371,7 +371,7 @@ export class LocalReviewLearningStore {
         explanation: "Founder-confirmed understanding for this transaction.", reviewItemId: null,
       };
     }
-    const matching = this.listRules().filter((rule) => rule.status === "active"
+    const matching = rules.filter((rule) => rule.status === "active"
       && rule.normalizedCounterparty === transaction.normalizedCounterparty
       && (rule.accountId === null || rule.accountId === transaction.accountId));
     const rank = (source: LearningRuleSource) => source === "user-created" ? 2 : 1;
@@ -410,7 +410,8 @@ export class LocalReviewLearningStore {
   }
 
   evaluateTransactions(transactions: readonly CanonicalTransaction[], evaluatedAt: string) {
-    return transactions.map((transaction) => this.evaluateTransaction(transaction, evaluatedAt));
+    const rules = this.listRules();
+    return transactions.map((transaction) => this.evaluateTransaction(transaction, evaluatedAt, rules));
   }
 
   resolveReview(reviewId: string, decision: ReviewDecision, decidedAt: string, userPhrase: string | null = null) {
