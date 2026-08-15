@@ -399,3 +399,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .depth-object .world-node.is-selected { left:72px; top:92px; transform:translate(-50%,-50%) scale(.5); }
   .world-dock,.universe-shell[class*="world-"] .world-dock { width:calc(100vw - 20px); max-height:52svh; bottom:10px; padding:18px; }
 }
+
+/* Foundation v1 invariants: one object grammar and subordinate information surfaces. */
+.world-node,.child-object { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.world-node>span,.child-object>span { order:1; margin:0 0 7px; }
+.world-node>svg,.child-object>svg { position:static; order:2; margin:0; transform:none; }
+.world-node>strong,.child-object>strong { order:3; margin:7px 0 0; }
+.world-dock,.universe-shell[class*="world-"] .world-dock { width:min(980px,calc(100vw - 64px)); max-height:34svh; padding:18px 24px; }
+.world-dock>.world-kicker:first-child,.world-dock>.world-kicker:first-child+h2 { display:none; }
+.world-dock .pnn-grid { margin-top:0; gap:12px; }
+.world-dock .pnn-grid>section { padding:11px 13px; }
+.review-correction { display:block; scroll-margin-block:18vh; }
+.review-world-object { display:grid; grid-template-rows:auto 1fr auto; place-items:center; gap:7px; }
+.review-world-object>strong { order:1; }
+.review-world-object>svg { order:2; }
+.review-world-object>small { order:3; color:var(--text-muted); font-size:10px; }
+@media (max-width:720px) { .world-dock,.universe-shell[class*="world-"] .world-dock { width:calc(100vw - 20px); max-height:44svh; padding:16px 18px; } }

@@ -6,6 +6,8 @@ const componentPath = new URL("../components/financial-home.tsx", import.meta.ur
 const pagePath = new URL("../app/page.tsx", import.meta.url);
 const stylesPath = new URL("../app/globals.css", import.meta.url);
 const rendererPath = new URL("../components/webgl-aurora.tsx", import.meta.url);
+const reviewPagePath = new URL("../app/review/page.tsx", import.meta.url);
+const reviewFormPath = new URL("../components/review-decision-form.tsx", import.meta.url);
 
 test("Universe consumes only the browser-safe homepage view", async () => {
   const [component, page] = await Promise.all([readFile(componentPath, "utf8"), readFile(pagePath, "utf8")]);
@@ -108,4 +110,21 @@ test("Founder acceptance removes ghost Worlds and supports in-context transactio
   assert.match(component, /InlineTransactionCorrection/);
   assert.match(component, /setSelectedLifestyle\(category\.label\); beginTravel\(true\)/);
   assert.match(component, /surfaceOpen && !travelling/);
+});
+
+test("Foundation v1 freezes one object grammar and continuous teaching flow", async () => {
+  const [styles, reviewPage, reviewForm] = await Promise.all([
+    readFile(stylesPath, "utf8"), readFile(reviewPagePath, "utf8"), readFile(reviewFormPath, "utf8"),
+  ]);
+  assert.match(styles, /Foundation v1 invariants/);
+  assert.match(styles, /world-node>span,.child-object>span \{ order:1/);
+  assert.match(styles, /world-node>svg,.child-object>svg \{ order:2/);
+  assert.match(styles, /world-node>strong,.child-object>strong \{ order:3/);
+  assert.match(styles, /max-height:34svh/);
+  assert.match(reviewPage, /These decisions affect \$\{affectedTransactions\} transactions/);
+  assert.match(reviewPage, /relationshipQueue\.items\.length > 0/);
+  assert.doesNotMatch(reviewPage, /Relationship queue is clear|pending relationship candidates/);
+  assert.match(reviewForm, /scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/);
+  assert.match(reviewForm, /window\.setTimeout\(\(\) => router\.refresh\(\)/);
+  assert.doesNotMatch(reviewForm, /Next transaction/);
 });

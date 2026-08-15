@@ -170,9 +170,10 @@ export class FounderReviewService {
           })),
           suggestions: suggestionsFor(item, matched, this.#store.listLanguageAliases()),
         };
-      }).sort((left, right) => Number(right.recurring) - Number(left.recurring)
-        || right.totalAmount - left.totalAmount
+      }).sort((left, right) => Number(right.similarCount > 1) - Number(left.similarCount > 1)
+        || Number(right.recurring) - Number(left.recurring)
         || right.similarCount - left.similarCount
+        || right.totalAmount - left.totalAmount
         || (right.representativeTransactions[0]?.date ?? "").localeCompare(left.representativeTransactions[0]?.date ?? "")
         || Number(["expense", "income", "credit-card-purchase"].includes(right.currentFinancialMeaning)) - Number(["expense", "income", "credit-card-purchase"].includes(left.currentFinancialMeaning))
         || left.description.localeCompare(right.description)),
@@ -203,9 +204,9 @@ export class FounderReviewService {
     }
   }
 
-  undo(actionToken: string, now = new Date()) {
+  undo(actionToken: string, now = new Date(), scope: "one" | "group" = "group") {
     const reviewIds = unsealReviewReference(actionToken, this.#key, now);
-    try { return this.#store.undoReviews(reviewIds, now.toISOString()); }
+    try { return this.#store.undoReviews(scope === "one" ? reviewIds.slice(0, 1) : reviewIds, now.toISOString()); }
     catch { throw new FounderReviewServiceError("INVALID_ACTION"); }
   }
 

@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
-    const restored = text(body.actionToken) ? withReviewRuntime(({ service }) => service.undo(text(body.actionToken))) : null;
+    const restored = text(body.actionToken) ? withReviewRuntime(({ service }) => service.undo(text(body.actionToken), new Date(), text(body.scope) === "one" ? "one" : "group")) : null;
     if (!restored) return NextResponse.json({ message: "Undo could not be completed." }, { status: 400 });
     appendSafeAuditEvent({ at: new Date().toISOString(), event: "review-saved", authority: "founder", source: "local-ui", reason: "Founder reversed a recent review decision." });
     revalidatePath("/");

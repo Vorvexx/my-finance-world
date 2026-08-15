@@ -138,10 +138,10 @@ test("review UI presents grouped evidence and all three Founder choices", async 
     readFile(new URL("../app/review/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/review-decision-form.tsx", import.meta.url), "utf8"),
   ]);
-  for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time"])
+  for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time", "Inspect all"])
     assert.equal(page.includes(phrase), true, phrase);
   for (const phrase of ["Confirm", "Only this transaction", "Review later", "Undo"]) assert.equal(form.includes(phrase), true, phrase);
-  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "Describe it naturally", "review-world-object", "Inspect all", "Apply to all matching"])
+  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "Describe it naturally", "review-world-object", "Apply to all matching"])
     assert.equal(form.includes(phrase), true, phrase);
 });
 
@@ -156,6 +156,20 @@ test("classification can be undone atomically with its learned rule and alias", 
     context.service.undo(queue.items[0].actionToken, new Date("2099-08-08T12:02:00.000Z"));
     assert.equal(context.store.listRules().length, 0); assert.equal(context.store.listLanguageAliases().length, 0);
     assert.equal(context.store.listReviewItems("pending").length, 1);
+  } finally { await context.cleanup(); }
+});
+
+test("individual Undo from a grouped decision restores only the saved transaction", async () => {
+  const context = await fixture();
+  try {
+    const sources = [transaction("private-transaction-1"), transaction("private-transaction-2")];
+    context.store.evaluateTransactions(sources, FIRST.toISOString());
+    const queue = context.service.listPending(FIRST, sources); if (queue.status !== "available") assert.fail("queue unavailable");
+    context.service.save({ actionToken: queue.items[0].actionToken, choice: "classify", scope: "one", financialMeaning: "expense", category: "Dining", world: "cash" }, LATER);
+    assert.equal(context.store.listReviewItems("resolved").length, 1);
+    context.service.undo(queue.items[0].actionToken, new Date("2099-08-08T12:02:00.000Z"), "one");
+    assert.equal(context.store.listReviewItems("resolved").length, 0);
+    assert.equal(context.store.listReviewItems("pending").length, 2);
   } finally { await context.cleanup(); }
 });
 
