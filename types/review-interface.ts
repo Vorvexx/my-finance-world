@@ -46,6 +46,7 @@ export type FounderReviewInput = {
   financialMeaning?: FinancialMeaning | null;
   category?: string | null;
   world?: MoneyWorldKey | null;
-  scope?: "one" | "group";
+  scope?: "one" | "subset" | "group";
+  selectedIndexes?: readonly number[];
   userPhrase?: string | null;
 };

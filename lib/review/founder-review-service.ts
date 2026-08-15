@@ -6,6 +6,7 @@ import type { CanonicalTransaction, FinancialMeaning } from "../../types/transac
 import { LocalReviewLearningStore, ReviewLearningError } from "./local-review-learning-store.ts";
 
 const WORLDS = new Set<MoneyWorldKey>(["cash", "investments", "home", "vehicle", "creditDebt", "income", "upcoming", "future"]);
+const WORLD_NAMES: Record<MoneyWorldKey, string> = { cash: "Lifestyle", investments: "Investments", home: "Home", vehicle: "Vehicle", creditDebt: "Liabilities", income: "Income", upcoming: "Upcoming", future: "Other" };
 const MEANINGS = new Set<FinancialMeaning>([
   "expense", "income", "refund", "reversal", "fee", "interest", "credit-card-purchase",
   "credit-card-payment", "transfer", "cash-withdrawal", "cash-deposit", "unknown",
@@ -110,7 +111,7 @@ const suggestionsFor = (item: ReviewItem, transactions: readonly CanonicalTransa
   const words = new Set(subject.split(/[^a-z0-9]+/).filter(Boolean));
   const learned = aliases.map((alias) => CONCEPTS.find((concept) => concept.financialMeaning === alias.classification.financialMeaning && concept.category === alias.classification.category && concept.world === alias.classification.world)).filter((concept): concept is (typeof CONCEPTS)[number] => Boolean(concept));
   const concepts = [...new Set([...learned, ...CONCEPTS])];
-  return concepts.filter((concept) => !direction || !concept.directions || concept.directions.includes(direction)).map((concept) => {
+  const governed = concepts.filter((concept) => !direction || !concept.directions || concept.directions.includes(direction)).map((concept) => {
     const terms = concept.terms.split(" ");
     const matches = terms.filter((term) => words.has(term) || (term.length >= 4 && subject.includes(term))).length;
     const current = concept.financialMeaning === item.currentFinancialMeaning && concept.category === item.currentCategory && concept.world === item.currentWorld;
@@ -122,6 +123,12 @@ const suggestionsFor = (item: ReviewItem, transactions: readonly CanonicalTransa
     recommended: score >= 20,
     reason: score >= 100 ? "Matches the current canonical understanding." : score > 0 ? "Suggested from the transaction name and direction; confirmation is still required." : "Available canonical concept.",
   }));
+  const custom = aliases.flatMap((alias, index) => {
+    if (!alias.classification.financialMeaning || !alias.classification.category || !alias.classification.world
+      || CONCEPTS.some((concept) => concept.financialMeaning === alias.classification.financialMeaning && concept.category === alias.classification.category && concept.world === alias.classification.world)) return [];
+    return [{ id: `founder-${index}`, label: alias.classification.category, path: `${WORLD_NAMES[alias.classification.world]} → ${alias.classification.category}`, financialMeaning: alias.classification.financialMeaning, category: alias.classification.category, world: alias.classification.world, searchTerms: alias.phrase, recommended: subject.includes(alias.phrase), reason: "Created by the Founder and available for reuse." } satisfies BrowserReviewSuggestion];
+  });
+  return [...custom, ...governed];
 };
 
 export class FounderReviewService {
@@ -194,9 +201,14 @@ export class FounderReviewService {
       if ((category !== null && category.length > 80) || (world !== null && !WORLDS.has(world))
         || (financialMeaning !== null && !MEANINGS.has(financialMeaning))) throw new FounderReviewServiceError("INVALID_ACTION");
       const decision = { kind: "classify" as const, category, world, financialMeaning };
-      return input.scope === "group" && reviewIds.length > 1
-        ? this.#store.resolveReviewGroup(reviewIds, decision, now.toISOString(), input.userPhrase?.trim() || null)
-        : this.#store.resolveReview(reviewId, decision, now.toISOString(), input.userPhrase?.trim() || null);
+      if (input.scope === "group" && reviewIds.length > 1) return this.#store.resolveReviewGroup(reviewIds, decision, now.toISOString(), input.userPhrase?.trim() || null);
+      if (input.scope === "one") return this.#store.resolveReviewSubset([reviewId], decision, now.toISOString(), input.userPhrase?.trim() || null);
+      if (input.scope === "subset") {
+        const indexes = [...new Set(input.selectedIndexes ?? [])];
+        if (indexes.length === 0 || indexes.some((index) => !Number.isInteger(index) || index < 0 || index >= reviewIds.length)) throw new FounderReviewServiceError("INVALID_ACTION");
+        return this.#store.resolveReviewSubset(indexes.map((index) => reviewIds[index]), decision, now.toISOString(), input.userPhrase?.trim() || null);
+      }
+      return this.#store.resolveReview(reviewId, decision, now.toISOString(), input.userPhrase?.trim() || null);
     } catch (error) {
       if (error instanceof FounderReviewServiceError) throw error;
       if (error instanceof ReviewLearningError) throw new FounderReviewServiceError("INVALID_ACTION");
@@ -204,9 +216,11 @@ export class FounderReviewService {
     }
   }
 
-  undo(actionToken: string, now = new Date(), scope: "one" | "group" = "group") {
+  undo(actionToken: string, now = new Date(), scope: "one" | "subset" | "group" = "group", selectedIndexes: readonly number[] = []) {
     const reviewIds = unsealReviewReference(actionToken, this.#key, now);
-    try { return this.#store.undoReviews(scope === "one" ? reviewIds.slice(0, 1) : reviewIds, now.toISOString()); }
+    const target = scope === "one" ? reviewIds.slice(0, 1) : scope === "subset" ? [...new Set(selectedIndexes)].map((index) => reviewIds[index]).filter(Boolean) : reviewIds;
+    if (target.length === 0) throw new FounderReviewServiceError("INVALID_ACTION");
+    try { return this.#store.undoReviews(target, now.toISOString()); }
     catch { throw new FounderReviewServiceError("INVALID_ACTION"); }
   }
 

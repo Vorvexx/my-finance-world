@@ -138,10 +138,10 @@ test("review UI presents grouped evidence and all three Founder choices", async 
     readFile(new URL("../app/review/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/review-decision-form.tsx", import.meta.url), "utf8"),
   ]);
-  for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time", "Inspect all"])
+  for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time"])
     assert.equal(page.includes(phrase), true, phrase);
   for (const phrase of ["Confirm", "Only this transaction", "Review later", "Undo"]) assert.equal(form.includes(phrase), true, phrase);
-  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "Describe it naturally", "review-world-object", "Apply to all matching"])
+  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "New category", "review-world-object", "Choose from all", "selectedIndexes"])
     assert.equal(form.includes(phrase), true, phrase);
 });
 
@@ -167,9 +167,39 @@ test("individual Undo from a grouped decision restores only the saved transactio
     const queue = context.service.listPending(FIRST, sources); if (queue.status !== "available") assert.fail("queue unavailable");
     context.service.save({ actionToken: queue.items[0].actionToken, choice: "classify", scope: "one", financialMeaning: "expense", category: "Dining", world: "cash" }, LATER);
     assert.equal(context.store.listReviewItems("resolved").length, 1);
+    assert.equal(context.store.listRules().length, 0);
     context.service.undo(queue.items[0].actionToken, new Date("2099-08-08T12:02:00.000Z"), "one");
     assert.equal(context.store.listReviewItems("resolved").length, 0);
     assert.equal(context.store.listReviewItems("pending").length, 2);
+  } finally { await context.cleanup(); }
+});
+
+test("a selected subset resolves explicitly without learning across the remaining merchant group", async () => {
+  const context = await fixture();
+  try {
+    const sources = [0, 1, 2, 3].map((index) => ({ ...transaction(`subset-${index}`), amount: 10 + index }));
+    context.store.evaluateTransactions(sources, FIRST.toISOString());
+    const queue = context.service.listPending(FIRST, sources); if (queue.status !== "available") assert.fail("queue unavailable");
+    const saved = context.service.save({ actionToken: queue.items[0].actionToken, choice: "classify", scope: "subset", selectedIndexes: [0, 2], financialMeaning: "expense", category: "Groceries", world: "cash" }, LATER);
+    assert.equal("resolvedCount" in saved ? saved.resolvedCount : null, 2);
+    assert.equal(context.store.listReviewItems("resolved").length, 2);
+    assert.equal(context.store.listReviewItems("pending").length, 2);
+    assert.equal(context.store.listRules().length, 0);
+    context.service.undo(queue.items[0].actionToken, new Date("2099-08-08T12:02:00.000Z"), "subset", [0, 2]);
+    assert.equal(context.store.listReviewItems("pending").length, 4);
+  } finally { await context.cleanup(); }
+});
+
+test("a Founder-created category persists as an alias and is offered again without a broad rule", async () => {
+  const context = await fixture();
+  try {
+    const source = transaction(); context.store.evaluateTransaction(source, FIRST.toISOString());
+    const queue = context.service.listPending(FIRST, [source]); if (queue.status !== "available") assert.fail("queue unavailable");
+    context.service.save({ actionToken: queue.items[0].actionToken, choice: "classify", scope: "one", financialMeaning: "expense", category: "Pet care", world: "cash", userPhrase: "pet care" }, LATER);
+    assert.equal(context.store.listRules().length, 0); assert.equal(context.store.listLanguageAliases().length, 1);
+    const next = transaction("private-transaction-2"); context.store.evaluateTransaction(next, LATER.toISOString());
+    const nextQueue = context.service.listPending(new Date("2099-08-08T12:02:00.000Z"), [next]); if (nextQueue.status !== "available") assert.fail("queue unavailable");
+    assert.equal(nextQueue.items[0].suggestions.some((suggestion) => suggestion.category === "Pet care" && suggestion.reason.includes("Founder")), true);
   } finally { await context.cleanup(); }
 });
 
@@ -207,7 +237,7 @@ test("a classified transaction can be corrected contextually before a review dec
     assert.ok(correction);
     context.service.correct(correction.actionToken, { financialMeaning: "expense", category: "Maintenance & Repairs", world: "vehicle" }, new Date("2099-08-08T12:03:00.000Z"));
     assert.equal(context.store.listReviewItems("resolved").length, 1);
-    assert.equal(context.store.listRules().length, 1);
+    assert.equal(context.store.listRules().length, 0);
     const applied = context.store.evaluateTransaction(source, "2099-08-08T12:04:00.000Z");
     assert.equal(applied.category, "Maintenance & Repairs");
     assert.equal(applied.world, "vehicle");

@@ -20,7 +20,8 @@ export async function POST(request: Request) {
       financialMeaning: choice === "classify" ? text(body.financialMeaning) as FinancialMeaning : null,
       category: choice === "classify" ? text(body.category) || null : null,
       world: choice === "classify" ? (text(body.world) || null) as MoneyWorldKey | null : null,
-      scope: text(body.scope) === "group" ? "group" : "one",
+      scope: text(body.scope) === "group" ? "group" : text(body.scope) === "subset" ? "subset" : "one",
+      selectedIndexes: Array.isArray(body.selectedIndexes) ? body.selectedIndexes.filter((value): value is number => Number.isInteger(value)) : [],
       userPhrase: text(body.userPhrase) || null,
     }));
     if (!saved) return NextResponse.json({ message: "Review could not be saved." }, { status: 503 });
@@ -35,7 +36,9 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const body = await request.json() as Record<string, unknown>;
-    const restored = text(body.actionToken) ? withReviewRuntime(({ service }) => service.undo(text(body.actionToken), new Date(), text(body.scope) === "one" ? "one" : "group")) : null;
+    const scope = text(body.scope) === "one" ? "one" : text(body.scope) === "subset" ? "subset" : "group";
+    const selectedIndexes = Array.isArray(body.selectedIndexes) ? body.selectedIndexes.filter((value): value is number => Number.isInteger(value)) : [];
+    const restored = text(body.actionToken) ? withReviewRuntime(({ service }) => service.undo(text(body.actionToken), new Date(), scope, selectedIndexes)) : null;
     if (!restored) return NextResponse.json({ message: "Undo could not be completed." }, { status: 400 });
     appendSafeAuditEvent({ at: new Date().toISOString(), event: "review-saved", authority: "founder", source: "local-ui", reason: "Founder reversed a recent review decision." });
     revalidatePath("/");

@@ -118,7 +118,7 @@ test("Foundation v1 freezes one object grammar and continuous teaching flow", as
   ]);
   assert.match(styles, /Foundation v1 invariants/);
   assert.match(styles, /world-node>span,.child-object>span \{ order:1/);
-  assert.match(styles, /world-node>svg,.child-object>svg \{ order:2/);
+  assert.match(styles, /world-node>svg,.child-object>svg \{ position:static; order:2/);
   assert.match(styles, /world-node>strong,.child-object>strong \{ order:3/);
   assert.match(styles, /max-height:34svh/);
   assert.match(reviewPage, /These decisions affect \$\{affectedTransactions\} transactions/);

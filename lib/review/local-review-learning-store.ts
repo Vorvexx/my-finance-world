@@ -308,17 +308,16 @@ export class LocalReviewLearningStore {
     const row = this.#database.prepare("SELECT * FROM review_items WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
     const oldDecisionRow = this.#database.prepare("SELECT * FROM review_decisions WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
     if (!row) throw new ReviewLearningError("REVIEW_NOT_FOUND");
-    if (String(row.status) === "pending" && !oldDecisionRow) return this.resolveReview(reviewId, decision, decidedAt);
+    if (String(row.status) === "pending" && !oldDecisionRow) return this.resolveReviewSubset([reviewId], decision, decidedAt);
     if (String(row.status) !== "resolved" || !oldDecisionRow) throw new ReviewLearningError("REVIEW_NOT_FOUND");
-    const item = this.#reviewFromRow(row); const old = decryptJsonPayload<DecisionPayload>(String(oldDecisionRow.encrypted_payload), this.#key);
+    const old = decryptJsonPayload<DecisionPayload>(String(oldDecisionRow.encrypted_payload), this.#key);
     const classification: RuleClassification = { financialMeaning: decision.financialMeaning ?? null, category: decision.category ?? null, world: decision.world ?? null };
     assertClassification(classification);
     this.#database.exec("BEGIN IMMEDIATE");
     try {
-      if (old.learnedRuleId) this.#database.prepare("DELETE FROM learning_rules WHERE rule_id = ?").run(old.learnedRuleId);
       if (old.learnedAliasId) this.#database.prepare("DELETE FROM language_aliases WHERE alias_id = ?").run(old.learnedAliasId);
       else if (old.previousAlias) this.createLanguageAlias(old.previousAlias.phrase, old.previousAlias.classification, decidedAt);
-      const learnedRuleId = this.createRule({ source: "user-confirmed-learned", normalizedCounterparty: item.normalizedCounterparty, accountId: item.accountId, classification, createdAt: decidedAt, explanation: `Matched Founder correction created ${decidedAt.slice(0, 10)}.` }).id;
+      const learnedRuleId = null;
       const payload: DecisionPayload = { ...decision, relatedTransactionId: null, learnedRuleId, learnedAliasId: null, previousAlias: null };
       this.#database.prepare("UPDATE review_decisions SET decision_kind = 'classify', encrypted_payload = ?, decided_at = ? WHERE review_id = ?").run(encryptJsonPayload(payload, this.#key), decidedAt, reviewId);
       this.#database.prepare("UPDATE review_items SET updated_at = ? WHERE review_id = ?").run(decidedAt, reviewId);
@@ -498,6 +497,40 @@ export class LocalReviewLearningStore {
       }
       this.#database.exec("COMMIT");
       return { status: "resolved" as const, learnedRuleId, resolvedCount: items.length };
+    } catch {
+      this.#database.exec("ROLLBACK");
+      throw new ReviewLearningError("REVIEW_PERSISTENCE_FAILED");
+    }
+  }
+
+  resolveReviewSubset(reviewIds: readonly string[], decision: ReviewDecision, decidedAt: string, userPhrase: string | null = null) {
+    assertTimestamp(decidedAt);
+    const uniqueIds = [...new Set(reviewIds)];
+    if (uniqueIds.length === 0 || decision.kind !== "classify") throw new ReviewLearningError("REVIEW_INVALID");
+    const items = uniqueIds.map((reviewId) => {
+      const row = this.#database.prepare("SELECT * FROM review_items WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
+      if (!row) throw new ReviewLearningError("REVIEW_NOT_FOUND");
+      return this.#reviewFromRow(row);
+    });
+    if (items.some((item) => item.status !== "pending")) throw new ReviewLearningError("REVIEW_INVALID");
+    const classification: RuleClassification = {
+      financialMeaning: decision.financialMeaning ?? null, category: decision.category ?? null, world: decision.world ?? null,
+    };
+    assertClassification(classification);
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      const existingAlias = userPhrase?.trim() ? this.listLanguageAliases().find((alias) => alias.phrase === userPhrase.trim().replace(/\s+/g, " ").toLocaleLowerCase("en-CA")) : null;
+      const previousAlias = existingAlias ? { phrase: existingAlias.phrase, classification: existingAlias.classification } : null;
+      const alias = userPhrase?.trim() ? this.createLanguageAlias(userPhrase, classification, decidedAt) : null;
+      const learnedAliasId = alias?.created ? alias.id : null;
+      for (const item of items) {
+        const payload: DecisionPayload = { ...decision, relatedTransactionId: null, learnedRuleId: null, learnedAliasId, previousAlias };
+        this.#database.prepare("INSERT INTO review_decisions VALUES (?, ?, ?, 'classify', ?, ?)")
+          .run(`review-decision:${randomUUID()}`, item.id, item.transactionId, encryptJsonPayload(payload, this.#key), decidedAt);
+        this.#database.prepare("UPDATE review_items SET status = 'resolved', updated_at = ? WHERE review_id = ?").run(decidedAt, item.id);
+      }
+      this.#database.exec("COMMIT");
+      return { status: "resolved" as const, learnedRuleId: null, resolvedCount: items.length };
     } catch {
       this.#database.exec("ROLLBACK");
       throw new ReviewLearningError("REVIEW_PERSISTENCE_FAILED");

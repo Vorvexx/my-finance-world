@@ -61,7 +61,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
             {classificationItems.slice(0, 1).map((item) => (
               <article key={item.actionToken} className="rounded-[28px] border border-white/10 bg-[#0b1821] p-6 md:p-7">
                 <div className="review-transaction"><div><p>{item.recurring ? "Recurring transaction" : "Transaction"}</p><h3>{item.description}</h3><small>{item.accountNames.join(", ")} · {item.direction}</small></div><strong>{new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(item.totalAmount)}</strong></div>
-                {item.similarCount > 1 && <><p className="mt-3 text-sm text-emerald-200">One answer can update {item.similarCount} matching transactions.</p><details className="review-matches"><summary>Inspect all {item.similarCount} affected transactions</summary><ul>{item.representativeTransactions.map((transaction, index) => <li key={`${transaction.date}-${index}`}><span><strong>{transaction.description}</strong><small>{transaction.date} · {transaction.accountName}</small></span><b>{new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(transaction.amount)}</b></li>)}</ul></details></>}
+                {item.similarCount > 1 && <p className="mt-3 text-sm text-emerald-200">One answer can update up to {item.similarCount} matching transactions.</p>}
                 <details className="review-evidence"><summary>Why this suggestion?</summary><p>{item.explanation}</p><p>Representative description: {item.representativeDescription}</p></details>
                 <ReviewDecisionForm item={item} />
               </article>
