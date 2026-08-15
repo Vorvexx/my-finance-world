@@ -8,6 +8,8 @@ const stylesPath = new URL("../app/globals.css", import.meta.url);
 const rendererPath = new URL("../components/webgl-aurora.tsx", import.meta.url);
 const reviewPagePath = new URL("../app/review/page.tsx", import.meta.url);
 const reviewFormPath = new URL("../components/review-decision-form.tsx", import.meta.url);
+const orbPath = new URL("../components/financial-orb.tsx", import.meta.url);
+const hudPath = new URL("../components/financial-hud.tsx", import.meta.url);
 
 test("Universe consumes only the browser-safe homepage view", async () => {
   const [component, page] = await Promise.all([readFile(componentPath, "utf8"), readFile(pagePath, "utf8")]);
@@ -25,7 +27,7 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
     "SpatialChild", "accountChildren", "CashflowChildDetail", "selectedCashflow", "Money In", "Money Out", "Recent", "Upcoming",
     "Nothing known yet", "CategoryDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
     "Property value", "Vehicle financing", "Add factual information", "Net worth", "journey-trail",
-    "child-object", "WorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
+    "child-object", "FinancialOrb", "FinancialWorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
     "Obligations", "Cashflow", "Contribution portions are context only and are never added",
     "Latest known statement", "does not replace or add to the canonical liability balance",
   ]) assert.equal(component.includes(phrase), true, phrase);
@@ -44,9 +46,10 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
 });
 
 test("Universe remains keyboard-operable, responsive, and motion-safe", async () => {
-  const [component, styles, renderer] = await Promise.all([readFile(componentPath, "utf8"), readFile(stylesPath, "utf8"), readFile(rendererPath, "utf8")]);
-  for (const phrase of ["<button", "aria-pressed", "aria-live=\"polite\"", "setSelectedAccount(null)"])
+  const [component, hud, styles, renderer] = await Promise.all([readFile(componentPath, "utf8"), readFile(hudPath, "utf8"), readFile(stylesPath, "utf8"), readFile(rendererPath, "utf8")]);
+  for (const phrase of ["<button", "aria-pressed", "setSelectedAccount(null)"])
     assert.equal(component.includes(phrase), true, phrase);
+  assert.match(hud, /aria-live="polite"/);
   for (const pattern of [
     /@media \(max-width: 820px\)/, /@media \(max-width: 620px\)/, /@media \(prefers-reduced-motion: reduce\)/,
     /depth-world/, /surface-arrive/, /webgl-aurora/, /world-drift/, /depth-object \.child-object\.is-selected/,
@@ -57,9 +60,10 @@ test("Universe remains keyboard-operable, responsive, and motion-safe", async ()
 });
 
 test("information surfaces close independently from spatial navigation", async () => {
-  const component = await readFile(componentPath, "utf8");
+  const [component, hud] = await Promise.all([readFile(componentPath, "utf8"), readFile(hudPath, "utf8")]);
   assert.match(component, /const closeSurface = \(\) => \{ setSurfaceAfterTravel\(false\); setSurfaceOpen\(false\); \}/);
-  assert.match(component, /aria-label="Close information surface"/);
+  assert.match(component, /<FinancialHud onClose=\{closeSurface\}>/);
+  assert.match(hud, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
   assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
@@ -112,14 +116,31 @@ test("Founder acceptance removes ghost Worlds and supports in-context transactio
   assert.match(component, /surfaceOpen && !travelling/);
 });
 
-test("Foundation v1 freezes one object grammar and continuous teaching flow", async () => {
-  const [styles, reviewPage, reviewForm] = await Promise.all([
-    readFile(stylesPath, "utf8"), readFile(reviewPagePath, "utf8"), readFile(reviewFormPath, "utf8"),
+test("Global Product Contract freezes one indivisible orb and one HUD anatomy", async () => {
+  const [component, orb, hud, styles, reviewPage, reviewForm] = await Promise.all([
+    readFile(componentPath, "utf8"), readFile(orbPath, "utf8"), readFile(hudPath, "utf8"), readFile(stylesPath, "utf8"), readFile(reviewPagePath, "utf8"), readFile(reviewFormPath, "utf8"),
   ]);
-  assert.match(styles, /Foundation v1 invariants/);
-  assert.match(styles, /world-node>span,.child-object>span \{ order:1/);
-  assert.match(styles, /world-node>svg,.child-object>svg \{ position:static; order:2/);
-  assert.match(styles, /world-node>strong,.child-object>strong \{ order:3/);
+  assert.match(orb, /financial-orb__name[^]*financial-orb__ball[^]*financial-orb__icon[^]*financial-orb__value/);
+  assert.match(orb, /FinancialOrbSize = "compact" \| "secondary" \| "primary" \| "hero"/);
+  assert.match(orb, /FinancialOrbState = "idle" \| "selected" \| "parent" \| "receded"/);
+  assert.match(component, /<FinancialOrb/);
+  assert.match(component, /<FinancialHud onClose=\{closeSurface\}>/);
+  assert.match(reviewForm, /<FinancialOrb/);
+  assert.doesNotMatch(component, /<button[^>]+className=\{`world-node/);
+  assert.doesNotMatch(component, /<button[^>]+className=\{`child-object/);
+  assert.doesNotMatch(reviewForm, /<button[^>]+review-world-object/);
+  assert.match(hud, /<aside className="world-dock financial-hud"/);
+  assert.match(styles, /Global Product Contract: one indivisible financial-object anatomy/);
+  assert.match(styles, /universe-shell \{ position:fixed; inset:0; height:100svh; min-height:100svh; max-height:100svh/);
+  assert.match(styles, /body:has\(\.universe-shell\) \{ height:100svh; overflow:hidden/);
+  for (const world of ["cash", "investments", "liabilities", "home", "vehicle", "lifestyle", "cashflow"])
+    assert.match(styles, new RegExp(`depth-universe \\.constellation-${world} \\{ left:`));
+  for (const anatomy of ["financial-orb__name", "financial-orb__ball", "financial-orb__icon", "financial-orb__value"])
+    assert.match(styles, new RegExp(anatomy));
+  assert.match(styles, /financial-orb \.financial-orb__icon[^}]+margin:0!important/);
+  assert.match(styles, /financial-orb \.financial-orb__icon>svg[^}]+position:static!important/);
+  assert.doesNotMatch(styles, /world-(?:cash|investments|liabilities|home|vehicle|lifestyle|cashflow)[^{,]*\.financial-orb__(?:name|ball|icon|value)/);
+  assert.match(styles, /@media \(max-height:700px\) and \(min-width:721px\)/);
   assert.match(styles, /max-height:34svh/);
   assert.match(reviewPage, /Only explicitly selected transactions will change/);
   assert.match(reviewPage, /relationshipQueue\.items\.length > 0/);
