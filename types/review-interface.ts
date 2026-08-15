@@ -18,7 +18,7 @@ export type BrowserReviewItem = {
   accountNames: readonly string[];
   direction: "inflow" | "outflow" | "unknown";
   recurring: boolean;
-  representativeTransactions: readonly { date: string; amount: number; accountName: string; description: string }[];
+  representativeTransactions: readonly { date: string | null; amount: number; accountName: string; description: string; direction: "inflow" | "outflow" | "unknown" }[];
   suggestions: readonly BrowserReviewSuggestion[];
 };
 

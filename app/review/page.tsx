@@ -23,8 +23,9 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   const evaluatedAt = new Date().toISOString();
   const attributed = persisted ? applyDeterministicAttribution(persisted.transactions) : [];
   const reviewed = withReviewRuntime(({ store }) => applyReviewOutcomes(attributed, store.evaluateTransactions(attributed, evaluatedAt), evaluatedAt)) ?? attributed;
-  const queue = loadReviewQueue(reviewed, new Map(model.money.accounts.map((account) => [account.id, account.name])));
-  const recentDecisions = withReviewRuntime(({ service }) => service.listRecentDecisions()) ?? [];
+  const accountNames = new Map(model.money.accounts.map((account) => [account.id, account.name]));
+  const queue = loadReviewQueue(reviewed, accountNames);
+  const recentDecisions = withReviewRuntime(({ service }) => service.listRecentDecisions(new Date(), 250, reviewed, accountNames)) ?? [];
   const relationshipQueue = loadRelationshipQueue();
   const oldestFirst = query.sort === "oldest";
   const orderedClassifications = query.change ? [...queue.items].sort((left, right) => Number(right.description === query.change) - Number(left.description === query.change)) : queue.items;
@@ -60,7 +61,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
             <p className="text-sm text-slate-300">One decision at a time, starting with the most useful.</p>
             {classificationItems.slice(0, 1).map((item) => (
               <article key={item.actionToken} className="rounded-[28px] border border-white/10 bg-[#0b1821] p-6 md:p-7">
-                <div className="review-transaction"><div><p>{item.recurring ? "Recurring transaction" : "Transaction"}</p><h3>{item.description}</h3><small>{item.accountNames.join(", ")} · {item.direction}</small></div><strong>{new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(item.totalAmount)}</strong></div>
+                <div className="review-transaction"><div><p>{item.recurring ? "Recurring transaction" : "Transaction"}</p><h3>{item.representativeTransactions[0]?.description ?? item.description}</h3><small>{[item.representativeTransactions[0]?.date ? new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${item.representativeTransactions[0].date}T00:00:00Z`)) : null, item.representativeTransactions[0]?.accountName].filter(Boolean).join(" · ")}</small></div><strong>{item.representativeTransactions[0] ? `${item.representativeTransactions[0].direction === "inflow" ? "+" : item.representativeTransactions[0].direction === "outflow" ? "−" : ""}${new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(Math.abs(item.representativeTransactions[0].amount))}` : new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(item.totalAmount)}</strong></div>
                 {item.similarCount > 1 && <p className="mt-3 text-sm text-emerald-200">One answer can update up to {item.similarCount} matching transactions.</p>}
                 <details className="review-evidence"><summary>Why this suggestion?</summary><p>{item.explanation}</p><p>Representative description: {item.representativeDescription}</p></details>
                 <ReviewDecisionForm item={item} />

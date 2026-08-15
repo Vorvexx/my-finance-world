@@ -161,7 +161,8 @@ export class FounderReviewService {
         const item = items[0];
         const why = explanation(item);
         const matched = items.flatMap((candidate) => transactionById.get(candidate.transactionId) ?? []);
-        const ordered = [...matched].sort((left, right) => right.transactionDate.localeCompare(left.transactionDate));
+        const reviewDate = (transaction: CanonicalTransaction) => transaction.transactionDate?.trim() || transaction.postedDate?.trim() || null;
+        const ordered = [...matched].sort((left, right) => (reviewDate(right) ?? "").localeCompare(reviewDate(left) ?? ""));
         return {
           actionToken: sealReviewReference(items.map((candidate) => candidate.id), this.#key, now), description: item.normalizedCounterparty || item.description,
           currentFinancialMeaning: item.currentFinancialMeaning, currentCategory: item.currentCategory,
@@ -172,8 +173,9 @@ export class FounderReviewService {
           accountNames: [...new Set(matched.map((transaction) => accountNames.get(transaction.accountId) ?? "Account"))],
           direction: matched[0]?.direction ?? "unknown", recurring: isRecurring(matched),
           representativeTransactions: ordered.map((transaction) => ({
-            date: transaction.transactionDate, amount: transaction.amount,
+            date: reviewDate(transaction), amount: transaction.amount,
             accountName: accountNames.get(transaction.accountId) ?? "Account", description: transaction.rawDescription,
+            direction: transaction.direction,
           })),
           suggestions: suggestionsFor(item, matched, this.#store.listLanguageAliases()),
         };
@@ -224,11 +226,19 @@ export class FounderReviewService {
     catch { throw new FounderReviewServiceError("INVALID_ACTION"); }
   }
 
-  listRecentDecisions(now = new Date(), limit = 250) {
+  listRecentDecisions(now = new Date(), limit = 250, transactions: readonly CanonicalTransaction[] = [], accountNames: ReadonlyMap<string, string> = new Map()) {
+    const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
     return [...this.#store.listReviewItems("resolved")].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, limit).flatMap((item) => {
       const decision = this.#store.reviewDecision(item.id);
       if (!decision || decision.kind !== "classify") return [];
-      return [{ actionToken: sealReviewReference([item.id], this.#key, now), description: item.normalizedCounterparty || item.description, world: decision.world, category: decision.category, financialMeaning: decision.financialMeaning }];
+      const transaction = transactionById.get(item.transactionId);
+      const date = transaction?.transactionDate?.trim() || transaction?.postedDate?.trim() || null;
+      return [{
+        actionToken: sealReviewReference([item.id], this.#key, now), description: transaction?.rawDescription || item.normalizedCounterparty || item.description,
+        world: decision.world, category: decision.category, financialMeaning: decision.financialMeaning,
+        date, accountName: transaction ? accountNames.get(transaction.accountId) ?? "Account" : null,
+        amount: transaction?.amount ?? null, direction: transaction?.direction ?? ("unknown" as const), currency: transaction?.currency ?? "CAD",
+      }];
     });
   }
 

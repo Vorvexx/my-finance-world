@@ -63,7 +63,7 @@ test("Founder decision persists learning, refreshes homepage inputs, and classif
   const context = await fixture();
   try {
     const source = transaction();
-    context.store.evaluateTransaction(source, FIRST.toISOString());
+    context.store.evaluateTransaction(transaction(), FIRST.toISOString());
     const before = deriveHomepageView({ model, transactions: [source], statementFacts: [], asOfDate: "2099-08-08" });
     assert.equal(before.lifestyle.qualifyingSpending.status, "known");
     assert.equal(before.lifestyle.qualifyingSpending.amount, 0);
@@ -130,6 +130,10 @@ test("recurring merchant groups lead value-only groups and expose review evidenc
     assert.equal(queue.items[0].direction, "outflow");
     assert.deepEqual(queue.items[0].accountNames, ["Everyday account"]);
     assert.equal(queue.items[0].representativeTransactions.length, 3);
+    assert.deepEqual(queue.items[0].representativeTransactions[0], {
+      date: "2099-07-25", amount: 10, accountName: "Everyday account",
+      description: "WEEKLY MERCHANT LOCATION DETAIL", direction: "outflow",
+    });
   } finally { await context.cleanup(); }
 });
 
@@ -141,8 +145,29 @@ test("review UI presents grouped evidence and all three Founder choices", async 
   for (const phrase of ["Representative description", "Why this suggestion?", "review-transaction", "One decision at a time"])
     assert.equal(page.includes(phrase), true, phrase);
   for (const phrase of ["Confirm", "Only this transaction", "Review later", "Undo"]) assert.equal(form.includes(phrase), true, phrase);
-  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "New category", "review-world-object", "Choose from all", "selectedIndexes"])
+  for (const phrase of ["Choose a World", "What did it mean?", "+ New", "Vorvex thinks this was", "New category", "review-world-object", "Inspect affected transactions", "selectedIndexes"])
     assert.equal(form.includes(phrase), true, phrase);
+});
+
+test("pending and recent reviews expose canonical transaction context with posted-date fallback", async () => {
+  const context = await fixture();
+  try {
+    const source = { ...transaction(), transactionDate: "", postedDate: "2099-08-07" };
+    context.store.evaluateTransaction(source, FIRST.toISOString());
+    const names = new Map([["private-account", "TD Chequing Account"]]);
+    const queue = context.service.listPending(FIRST, [source], names);
+    if (queue.status !== "available") assert.fail("queue unavailable");
+    assert.deepEqual(queue.items[0].representativeTransactions[0], {
+      date: "2099-08-07", amount: 24.5, accountName: "TD Chequing Account",
+      description: "SYNTHETIC CORNER CAFE", direction: "outflow",
+    });
+    context.service.save({ actionToken: queue.items[0].actionToken, choice: "classify", scope: "one", financialMeaning: "expense", category: "Dining", world: "cash" }, LATER);
+    const recent = context.service.listRecentDecisions(LATER, 250, [source], names);
+    assert.deepEqual({ description: recent[0].description, date: recent[0].date, accountName: recent[0].accountName, amount: recent[0].amount, direction: recent[0].direction, currency: recent[0].currency }, {
+      description: "SYNTHETIC CORNER CAFE", date: "2099-08-07", accountName: "TD Chequing Account",
+      amount: 24.5, direction: "outflow", currency: "CAD",
+    });
+  } finally { await context.cleanup(); }
 });
 
 test("classification can be undone atomically with its learned rule and alias", async () => {
