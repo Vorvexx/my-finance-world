@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import type { BrowserReviewItem, BrowserReviewSuggestion } from "@/types/review-interface";
 import type { FinancialMeaning } from "@/types/transactions";
 import type { WorldKey } from "@/components/financial-home";
-import { FinancialOrb, FinancialWorldIcon } from "@/components/financial-orb";
+import { FinancialOrb, FinancialWorldIcon, type FinancialOrbAccent } from "@/components/financial-orb";
 
 const WORLD_LABELS: Record<string, string> = { cash: "Lifestyle", home: "Home", vehicle: "Vehicle", investments: "Investments", creditDebt: "Liabilities", income: "Income", future: "Other", upcoming: "Upcoming" };
-const WORLD_VISUALS: Record<string, { world: WorldKey; tone: string }> = { cash: { world: "lifestyle", tone: "coral" }, home: { world: "home", tone: "amber" }, vehicle: { world: "vehicle", tone: "cyan" }, investments: { world: "investments", tone: "violet" }, creditDebt: { world: "liabilities", tone: "rose" }, income: { world: "cashflow", tone: "mint" }, future: { world: "cashflow", tone: "blue" }, upcoming: { world: "cashflow", tone: "blue" } };
+const WORLD_VISUALS: Record<string, { world: WorldKey; tone: FinancialOrbAccent }> = { cash: { world: "lifestyle", tone: "lifestyle" }, home: { world: "home", tone: "home" }, vehicle: { world: "vehicle", tone: "vehicle" }, investments: { world: "investments", tone: "investments" }, creditDebt: { world: "liabilities", tone: "liabilities" }, income: { world: "cashflow", tone: "cash" }, future: { world: "cashflow", tone: "cashflow" }, upcoming: { world: "cashflow", tone: "cashflow" } };
 
 export default function ReviewDecisionForm({ item }: { item: BrowserReviewItem }) {
   const router = useRouter();

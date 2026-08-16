@@ -8,7 +8,7 @@ test("Founder prototype connects the normal product journey without engineering 
   ].map((file) => readFile(new URL(file, import.meta.url), "utf8")));
   const product = files.join("\n");
   for (const capability of [
-    "Net worth", 'label: "Cash"', 'label: "Investments"', 'label: "Liabilities"', 'label: "Cashflow"',
+    "Net Worth", 'label: "Cash"', 'label: "Investments"', 'label: "Liabilities"', 'label: "Cashflow"',
     'label: "Lifestyle"', 'label: "Home"', 'label: "Vehicle"', "Money In", "Money Out", "Recent", "Upcoming",
     "My data", "Statements", "Needs attention",
   ]) assert.equal(product.includes(capability), true, capability);

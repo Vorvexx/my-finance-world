@@ -10,6 +10,8 @@ const reviewPagePath = new URL("../app/review/page.tsx", import.meta.url);
 const reviewFormPath = new URL("../components/review-decision-form.tsx", import.meta.url);
 const orbPath = new URL("../components/financial-orb.tsx", import.meta.url);
 const hudPath = new URL("../components/financial-hud.tsx", import.meta.url);
+const scenePath = new URL("../components/financial-scene.tsx", import.meta.url);
+const iconsPath = new URL("../components/vorvex-icon-system.tsx", import.meta.url);
 
 test("Universe consumes only the browser-safe homepage view", async () => {
   const [component, page] = await Promise.all([readFile(componentPath, "utf8"), readFile(pagePath, "utf8")]);
@@ -26,8 +28,8 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
   for (const phrase of [
     "SpatialChild", "accountChildren", "CashflowChildDetail", "selectedCashflow", "Money In", "Money Out", "Recent", "Upcoming",
     "Nothing known yet", "CategoryDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
-    "Property value", "Vehicle financing", "Add factual information", "Net worth", "journey-trail",
-    "child-object", "FinancialOrb", "FinancialWorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
+    "Property value", "Vehicle financing", "Add factual information", "Net Worth", "journey-trail",
+    "FinancialConstellation", "FinancialOrb", "FinancialWorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
     "Obligations", "Cashflow", "Contribution portions are context only and are never added",
     "Latest known statement", "does not replace or add to the canonical liability balance",
   ]) assert.equal(component.includes(phrase), true, phrase);
@@ -62,7 +64,7 @@ test("Universe remains keyboard-operable, responsive, and motion-safe", async ()
 test("information surfaces close independently from spatial navigation", async () => {
   const [component, hud] = await Promise.all([readFile(componentPath, "utf8"), readFile(hudPath, "utf8")]);
   assert.match(component, /const closeSurface = \(\) => \{ setSurfaceAfterTravel\(false\); setSurfaceOpen\(false\); \}/);
-  assert.match(component, /<FinancialHud onClose=\{closeSurface\}>/);
+  assert.match(component, /<FinancialHud open=\{surfaceOpen\} onOpen=\{\(\) => setSurfaceOpen\(true\)\} onClose=\{closeSurface\}>/);
   assert.match(hud, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
@@ -113,18 +115,18 @@ test("Founder acceptance removes ghost Worlds and supports in-context transactio
   assert.match(styles, /\.world-dock,\.universe-shell\[class\*="world-"\] \.world-dock/);
   assert.match(component, /InlineTransactionCorrection/);
   assert.match(component, /setSelectedLifestyle\(category\.label\); beginTravel\(true\)/);
-  assert.match(component, /surfaceOpen && !travelling/);
+  assert.match(component, /selected && !travelling && <FinancialHud open=\{surfaceOpen\}/);
 });
 
 test("Global Product Contract freezes one indivisible orb and one HUD anatomy", async () => {
-  const [component, orb, hud, styles, reviewPage, reviewForm] = await Promise.all([
-    readFile(componentPath, "utf8"), readFile(orbPath, "utf8"), readFile(hudPath, "utf8"), readFile(stylesPath, "utf8"), readFile(reviewPagePath, "utf8"), readFile(reviewFormPath, "utf8"),
+  const [component, orb, hud, scene, icons, styles, reviewPage, reviewForm] = await Promise.all([
+    readFile(componentPath, "utf8"), readFile(orbPath, "utf8"), readFile(hudPath, "utf8"), readFile(scenePath, "utf8"), readFile(iconsPath, "utf8"), readFile(stylesPath, "utf8"), readFile(reviewPagePath, "utf8"), readFile(reviewFormPath, "utf8"),
   ]);
   assert.match(orb, /financial-orb__name[^]*financial-orb__ball[^]*financial-orb__icon[^]*financial-orb__value/);
   assert.match(orb, /FinancialOrbSize = "compact" \| "secondary" \| "primary" \| "hero"/);
   assert.match(orb, /FinancialOrbState = "idle" \| "selected" \| "parent" \| "receded"/);
   assert.match(component, /<FinancialOrb/);
-  assert.match(component, /<FinancialHud onClose=\{closeSurface\}>/);
+  assert.match(component, /<FinancialHud open=\{surfaceOpen\}/);
   assert.match(reviewForm, /<FinancialOrb/);
   assert.doesNotMatch(component, /<button[^>]+className=\{`world-node/);
   assert.doesNotMatch(component, /<button[^>]+className=\{`child-object/);
@@ -133,10 +135,14 @@ test("Global Product Contract freezes one indivisible orb and one HUD anatomy", 
   assert.match(styles, /Global Product Contract: one indivisible financial-object anatomy/);
   assert.match(styles, /universe-shell \{ position:fixed; inset:0; height:100svh; min-height:100svh; max-height:100svh/);
   assert.match(styles, /body:has\(\.universe-shell\) \{ height:100svh; overflow:hidden/);
-  assert.match(component, /<div className="financial-constellation" role="group" aria-label="Financial constellation">\{WORLD_META\.map/);
-  assert.match(component, /<div className="financial-children">\{spatialChildren\.map/);
-  assert.match(styles, /depth-person \.financial-constellation \{ display:grid; grid-template-columns:repeat\(7/);
-  assert.match(styles, /depth-world \.financial-children \{ inset:210px 0 auto; display:grid/);
+  assert.match(component, /<FinancialScene depth=\{depth\}/);
+  assert.match(component, /<FinancialConstellation label="Financial constellation">\{WORLD_META\.map/);
+  assert.match(component, /<FinancialConstellation label=\{selected \? `\$\{selected\} objects`/);
+  assert.match(component, /name="Net Worth"[^]+accent="net-worth"[^]+size="hero"/);
+  assert.match(scene, /RINGS:[^]+1:[^]+2:[^]+3:[^]+4:[^]+5:[^]+6:[^]+7:[^]+8:/);
+  assert.match(scene, /coordinatesFor[^]+Math\.sqrt/);
+  assert.doesNotMatch(component, /constellation-(?:cash|investments|liabilities|home|vehicle|lifestyle|cashflow)/);
+  assert.doesNotMatch(component, /child-\$\{index/);
   assert.doesNotMatch(styles, /scroll-snap-type:\s*x mandatory/);
   assert.doesNotMatch(styles, /\.person-core \{ position:\s*sticky/);
   assert.doesNotMatch(styles, /depth-universe/);
@@ -146,7 +152,11 @@ test("Global Product Contract freezes one indivisible orb and one HUD anatomy", 
   assert.match(styles, /financial-orb \.financial-orb__icon>svg[^}]+position:static!important/);
   assert.doesNotMatch(styles, /world-(?:cash|investments|liabilities|home|vehicle|lifestyle|cashflow)[^{,]*\.financial-orb__(?:name|ball|icon|value)/);
   assert.match(styles, /@media \(max-height:700px\)/);
-  assert.match(styles, /max-height:34svh/);
+  assert.match(styles, /--vx-hud-reserve:218px/);
+  assert.match(styles, /financial-hud:not\(\[data-open\]\)/);
+  assert.match(styles, /VORVEX VISUAL & SPATIAL CONTRACT V1/);
+  for (const icon of ["dining", "entertainment", "shopping", "convenience", "alcohol", "cannabis", "telecom", "subscriptions", "utilities", "review"])
+    assert.match(icons, new RegExp(`icon === \\\"${icon}\\\"|icon=\\\"${icon}\\\"`));
   assert.match(reviewPage, /Only explicitly selected transactions will change/);
   assert.match(reviewPage, /relationshipQueue\.items\.length > 0/);
   assert.doesNotMatch(reviewPage, /Relationship queue is clear|pending relationship candidates/);

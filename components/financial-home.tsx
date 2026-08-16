@@ -6,21 +6,23 @@ import type { HomepageAccount, HomepageActivity, HomepageLifestyleCategory, Home
 import { FINANCIAL_PERIODS } from "@/lib/homepage/financial-period";
 import WebglAurora from "@/components/webgl-aurora";
 import InlineTransactionCorrection from "@/components/inline-transaction-correction";
-import { FinancialOrb, FinancialWorldIcon } from "@/components/financial-orb";
+import { FinancialOrb, FinancialWorldIcon, type FinancialOrbAccent } from "@/components/financial-orb";
 import { FinancialHud } from "@/components/financial-hud";
+import { FinancialConstellation, FinancialIntelligence, FinancialScene, SpatialTransition } from "@/components/financial-scene";
+import { categoryIcon, VorvexIcon, type VorvexIconKey } from "@/components/vorvex-icon-system";
 
 export type WorldKey = "cash" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "cashflow";
 type CashflowChildKey = "money-in" | "money-out" | "recent" | "upcoming";
-type SpatialChild = { key: string; label: string; value: string; tone: string; selected: boolean; select: () => void };
+type SpatialChild = { key: string; label: string; value: string; tone: FinancialOrbAccent; icon: ReactNode; reviewState?: boolean; selected: boolean; select: () => void };
 
-const WORLD_META: ReadonlyArray<{ key: WorldKey; label: string; position: string; tone: string }> = [
-  { key: "cash", label: "Cash", position: "constellation-cash", tone: "mint" },
-  { key: "investments", label: "Investments", position: "constellation-investments", tone: "violet" },
-  { key: "liabilities", label: "Liabilities", position: "constellation-liabilities", tone: "rose" },
-  { key: "home", label: "Home", position: "constellation-home", tone: "amber" },
-  { key: "vehicle", label: "Vehicle", position: "constellation-vehicle", tone: "cyan" },
-  { key: "lifestyle", label: "Lifestyle", position: "constellation-lifestyle", tone: "coral" },
-  { key: "cashflow", label: "Cashflow", position: "constellation-cashflow", tone: "blue" },
+const WORLD_META: ReadonlyArray<{ key: WorldKey; label: string; tone: FinancialOrbAccent }> = [
+  { key: "cash", label: "Cash", tone: "cash" },
+  { key: "investments", label: "Investments", tone: "investments" },
+  { key: "liabilities", label: "Liabilities", tone: "liabilities" },
+  { key: "home", label: "Home", tone: "home" },
+  { key: "vehicle", label: "Vehicle", tone: "vehicle" },
+  { key: "lifestyle", label: "Lifestyle", tone: "lifestyle" },
+  { key: "cashflow", label: "Cashflow", tone: "cashflow" },
 ];
 const formatMoney = (value: number, currency: string) => new Intl.NumberFormat("en-CA", {
   style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
@@ -132,7 +134,7 @@ function IntelligenceRail({ view, world, account, category }: { view: HomepageVi
   else if (world === "investments") content = <><section><strong>{view.investments.accountCount} recorded investment account{view.investments.accountCount === 1 ? "" : "s"}</strong><small>{view.investments.changeMessage}</small></section><section><strong>Performance remains evidence-bound</strong><small>Recorded account-value movement is not described as return without complete contribution, withdrawal, fee and performance evidence.</small></section></>;
   else if (world === "liabilities") content = <><section><strong>{view.liabilities.accountCount} liability object{view.liabilities.accountCount === 1 ? "" : "s"}</strong><small>Current canonical balance: {moneyLabel(view.liabilities.total, currency)}.</small></section><section><strong>Payments are settlements</strong><small>Credit-card payments reduce liability and never become Lifestyle spending.</small></section></>;
   else content = <section><strong>Known facts only</strong><small>This World remains factual and Unknown where current evidence is incomplete.</small></section>;
-  return <aside className="intelligence-rail" aria-label={`${world} intelligence`}><div><p className="world-kicker">{world} · Intelligence</p>{content}</div><div className="assistant-reserve"><span>Vorvex Assistant</span><small>Reserved for future guided intelligence.</small></div></aside>;
+  return <FinancialIntelligence><div><p className="world-kicker">{world} · Intelligence</p>{content}</div><div className="assistant-reserve"><span>Vorvex Assistant</span><small>Reserved for future guided intelligence.</small></div></FinancialIntelligence>;
 }
 
 function CashflowChildDetail({ child, view }: { child: CashflowChildKey; view: HomepageViewModel }) {
@@ -194,7 +196,7 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
   };
   useEffect(() => {
     if (!travelling) return;
-    const timer = window.setTimeout(() => { setTravelling(false); setSurfaceOpen(surfaceAfterTravel); }, 760);
+    const timer = window.setTimeout(() => { setTravelling(false); setSurfaceOpen(surfaceAfterTravel); }, 620);
     return () => window.clearTimeout(timer);
   }, [travelling, surfaceAfterTravel]);
   const selectedLifestyleCategory = selectedLifestyle ? view.lifestyle.categories.find((category) => category.label === selectedLifestyle) ?? null : null;
@@ -206,31 +208,35 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
   const accountWorld = selected === "cash" || selected === "investments" || selected === "liabilities" ? selected : null;
   const worldAccounts = accountWorld ? view[accountWorld].accounts : [];
   const depth = selectedAccount || selectedLifestyleCategory || selectedWorldCategory || selectedCashflow ? "object" : selected ? "world" : "person";
-  const accountTone = selected === "investments" ? "violet" : selected === "liabilities" ? "rose" : "mint";
-  const accountChildren: SpatialChild[] = worldAccounts.map((account) => ({ key: account.viewKey, label: account.displayName, value: moneyLabel(account.balance, view.currency), tone: accountTone, selected: selectedAccount?.viewKey === account.viewKey, select: () => { setSelectedAccount(account); beginTravel(true); } }));
-  const lifestyleChildren: SpatialChild[] = selected === "lifestyle" ? view.lifestyle.categories.slice(0, 7).map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: category.needsReview ? "mint" : "coral", selected: selectedLifestyleCategory?.viewKey === category.viewKey, select: () => { setSelectedLifestyle(category.label); beginTravel(true); } })) : [];
-  const realWorldChildren: SpatialChild[] = selected === "home" || selected === "vehicle" ? view[selected].categories.slice(0, 7).map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: selected === "home" ? "amber" : "cyan", selected: selectedWorldCategory?.viewKey === category.viewKey, select: () => { setSelectedRealWorldCategory(category.label); beginTravel(true); } })) : [];
-  const cashflowDefinitions: ReadonlyArray<{ key: CashflowChildKey; label: string; value: string; tone: string }> = [
-    { key: "money-in", label: "Money In", value: moneyLabel(view.cashflow.moneyIn, view.currency), tone: "mint" },
-    { key: "money-out", label: "Money Out", value: moneyLabel(view.cashflow.moneyOut, view.currency), tone: "coral" },
-    { key: "recent", label: "Recent", value: `${view.recentAndUpcoming.recent.length} events`, tone: "blue" },
-    { key: "upcoming", label: "Upcoming", value: `${view.recentAndUpcoming.upcoming.length} known + expected`, tone: "violet" },
+  const accountTone: FinancialOrbAccent = selected === "investments" ? "investments" : selected === "liabilities" ? "liabilities" : "cash";
+  const accountIcon: VorvexIconKey = selected === "investments" ? "investments" : selected === "liabilities" ? "liabilities" : "cash";
+  const accountChildren: SpatialChild[] = worldAccounts.map((account) => ({ key: account.viewKey, label: account.displayName, value: moneyLabel(account.balance, view.currency), tone: accountTone, icon: <VorvexIcon icon={accountIcon} />, selected: selectedAccount?.viewKey === account.viewKey, select: () => { setSelectedAccount(account); beginTravel(true); } }));
+  const lifestyleChildren: SpatialChild[] = selected === "lifestyle" ? view.lifestyle.categories.map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: category.needsReview ? "review" : "lifestyle", icon: categoryIcon(category.label), reviewState: category.needsReview, selected: selectedLifestyleCategory?.viewKey === category.viewKey, select: () => { setSelectedLifestyle(category.label); beginTravel(true); } })) : [];
+  const realWorldChildren: SpatialChild[] = selected === "home" || selected === "vehicle" ? view[selected].categories.map((category) => ({ key: category.viewKey, label: category.label, value: formatMoney(category.total, view.currency), tone: selected, icon: categoryIcon(category.label), selected: selectedWorldCategory?.viewKey === category.viewKey, select: () => { setSelectedRealWorldCategory(category.label); beginTravel(true); } })) : [];
+  const cashflowDefinitions: ReadonlyArray<{ key: CashflowChildKey; label: string; value: string; tone: FinancialOrbAccent; icon: VorvexIconKey }> = [
+    { key: "money-in", label: "Money In", value: moneyLabel(view.cashflow.moneyIn, view.currency), tone: "cashflow", icon: "income" },
+    { key: "money-out", label: "Money Out", value: moneyLabel(view.cashflow.moneyOut, view.currency), tone: "cashflow", icon: "outflow" },
+    { key: "recent", label: "Recent", value: `${view.recentAndUpcoming.recent.length} events`, tone: "cashflow", icon: "recent" },
+    { key: "upcoming", label: "Upcoming", value: `${view.recentAndUpcoming.upcoming.length} known + expected`, tone: "cashflow", icon: "upcoming" },
   ];
-  const cashflowChildren: SpatialChild[] = selected === "cashflow" ? cashflowDefinitions.map((child) => ({ ...child, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); beginTravel(true); } })) : [];
+  const cashflowChildren: SpatialChild[] = selected === "cashflow" ? cashflowDefinitions.map((child) => ({ ...child, icon: <VorvexIcon icon={child.icon} />, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); beginTravel(true); } })) : [];
   const spatialChildren = [...accountChildren, ...lifestyleChildren, ...realWorldChildren, ...cashflowChildren];
+  const activeTone = selected ?? "net-worth";
   return <main className={`universe-shell depth-${depth} ${selected ? `world-${selected}` : ""} ${travelling ? "is-travelling" : ""}`} aria-busy={travelling}>
     <WebglAurora />
     <div className="space-dust" aria-hidden="true" />
     <header className="universe-header"><div><button type="button" className="universe-brand" onClick={leaveWorld} aria-label="Return to Universe">Vorvex</button><span>{view.snapshotDate ?? "Snapshot unavailable"}</span></div><nav className="header-actions" aria-label="Financial data tools"><Link href="/facts">My data</Link><Link href="/statements">Add statements</Link><Link href="/review" className="header-review">Needs attention {view.lifestyle.actionableReviewCount > 0 && <span>{view.lifestyle.actionableReviewCount}</span>}</Link></nav></header>
     <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Universe</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? selectedWorldCategory?.label ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
-    <section className="universe-stage" aria-label="Your financial Worlds" data-depth={depth}>
-      <button className="person-core" type="button" onClick={leaveWorld} aria-label="Return to your universe"><span>Net worth</span><strong>{moneyLabel(view.position.netWorth, view.currency)}</strong><small>Assets {moneyLabel(view.position.assets, view.currency)}<br />Liabilities {moneyLabel(view.position.liabilities, view.currency)}</small><em>Based on connected financial data</em></button>
-      <div className="financial-constellation" role="group" aria-label="Financial constellation">{WORLD_META.map((world) => { const isParent = depth === "object" && selected === world.key; const state = isParent ? "parent" : selected === world.key ? "selected" : selected ? "receded" : "idle"; return <FinancialOrb key={world.key} name={world.label} value={nodeValue(world.key, view)} icon={<FinancialWorldIcon world={world.key} />} accent={world.tone} size={selected === world.key ? "primary" : "secondary"} state={state} onClick={isParent ? leaveObject : () => selectWorld(world.key)} aria-label={isParent ? `Return to ${world.label}` : undefined} aria-pressed={selected === world.key} className={`world-node ${world.position} ${selected === world.key ? "is-selected" : ""}`} />; })}</div>
-      <div className="financial-children">{spatialChildren.map((child, index) => <FinancialOrb key={child.key} name={child.label} value={child.value} icon={selected ? <FinancialWorldIcon world={selected} /> : null} accent={child.tone} size="secondary" state={child.selected ? "selected" : depth === "object" ? "receded" : "idle"} className={`child-object child-${index + 1} ${child.selected ? "is-selected" : ""}`} onClick={child.select} />)}</div>
-    </section>
+    <FinancialScene depth={depth} tone={activeTone} travelling={travelling}>
+      <SpatialTransition active={travelling} />
+      <div className="financial-scene__center">
+        <FinancialOrb name="Net Worth" value={moneyLabel(view.position.netWorth, view.currency)} icon={<VorvexIcon icon="net-worth" />} accent="net-worth" size="hero" state={selected ? "receded" : "selected"} onClick={leaveWorld} aria-label="Return to your universe" />
+      </div>
+      <FinancialConstellation label="Financial constellation">{WORLD_META.map((world) => { const isParent = depth === "object" && selected === world.key; const state = isParent ? "parent" : selected === world.key ? "selected" : selected ? "receded" : "idle"; return <FinancialOrb key={world.key} name={world.label} value={nodeValue(world.key, view)} icon={<FinancialWorldIcon world={world.key} />} accent={world.tone} size={selected === world.key ? "primary" : "secondary"} state={state} onClick={isParent ? leaveObject : () => selectWorld(world.key)} aria-label={isParent ? `Return to ${world.label}` : undefined} aria-pressed={selected === world.key} />; })}</FinancialConstellation>
+      <FinancialConstellation label={selected ? `${selected} objects` : "Financial objects"} role="children">{spatialChildren.map((child) => <FinancialOrb key={child.key} name={child.label} value={child.value} icon={child.icon} accent={child.tone} size={child.selected ? "primary" : "secondary"} state={child.selected ? "selected" : depth === "object" ? "receded" : "idle"} className={child.reviewState ? "financial-orb--review-state" : ""} onClick={child.select} />)}</FinancialConstellation>
+    </FinancialScene>
     {selected && (selectedAccount || selectedLifestyleCategory || selectedWorldCategory) && <IntelligenceRail view={view} world={selected} account={selectedAccount} category={selectedLifestyleCategory ?? selectedWorldCategory} />}
-    {selected && !surfaceOpen && !travelling && <button type="button" className="open-activity" onClick={() => setSurfaceOpen(true)}>Open details</button>}
-    {selected && surfaceOpen && !travelling && <FinancialHud onClose={closeSurface}>{selectedLifestyleCategory && selected === "lifestyle"
+    {selected && !travelling && <FinancialHud open={surfaceOpen} onOpen={() => setSurfaceOpen(true)} onClose={closeSurface}>{selectedLifestyleCategory && selected === "lifestyle"
       ? <CategoryDetail category={selectedLifestyleCategory} currency={view.currency} period={view.period} world="Lifestyle" />
       : selectedWorldCategory && (selected === "home" || selected === "vehicle")
       ? <CategoryDetail category={selectedWorldCategory} currency={view.currency} period={view.period} world={selected === "home" ? "Home" : "Vehicle"} />

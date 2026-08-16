@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-15 — Visual & Spatial Foundation V1
+
+- Replaced the row/legacy-offset constellation with one count-driven `FinancialConstellation` engine.
+- Made Net Worth and every centre, World and child a canonical `FinancialOrb`.
+- Added shared semantic colour, icon, typography, spacing, safe-zone and motion responsibilities.
+- Made the bottom `FinancialHud` geometry invariant across open and closed states.
+- Added fast spatial transition and reduced-motion contracts.
+- Prevented hidden internal scrolling and froze the connected-Chrome acceptance contract.
+
 This document records notable changes to My Finance World over time, including feature additions, behavioral changes, and breaking updates. It is intended to provide a human-readable history of what shipped and when—complementing git history with product-level context.
 
 ## 2026-08-09 — Vorvex Universe
