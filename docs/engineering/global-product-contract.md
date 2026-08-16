@@ -26,6 +26,8 @@ The Universe is one persistent scene. Navigation changes object state and placem
 
 Screen- or World-specific CSS may position whole Orb instances. It must not rearrange name, ball, icon, or value.
 
+The initial `depth-person` scene owns one `financial-constellation` plane for every World at every supported breakpoint. World children use the parallel `financial-children` plane. Neither plane may fall back to the retired horizontal scroller or direct absolute `child-*` coordinates while idle.
+
 ## HUD Contract
 
 `FinancialHud` is the single spatial information-surface shell. It owns the glass surface, close control, polite live region, glow, and content boundary. World, account, category, and Cashflow content is injected inside it. Closing the HUD hides information without changing spatial depth; spatial back navigation remains on the parent Orb or Universe control.

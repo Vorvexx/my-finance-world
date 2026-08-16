@@ -133,14 +133,19 @@ test("Global Product Contract freezes one indivisible orb and one HUD anatomy", 
   assert.match(styles, /Global Product Contract: one indivisible financial-object anatomy/);
   assert.match(styles, /universe-shell \{ position:fixed; inset:0; height:100svh; min-height:100svh; max-height:100svh/);
   assert.match(styles, /body:has\(\.universe-shell\) \{ height:100svh; overflow:hidden/);
-  for (const world of ["cash", "investments", "liabilities", "home", "vehicle", "lifestyle", "cashflow"])
-    assert.match(styles, new RegExp(`depth-universe \\.constellation-${world} \\{ left:`));
+  assert.match(component, /<div className="financial-constellation" role="group" aria-label="Financial constellation">\{WORLD_META\.map/);
+  assert.match(component, /<div className="financial-children">\{spatialChildren\.map/);
+  assert.match(styles, /depth-person \.financial-constellation \{ display:grid; grid-template-columns:repeat\(7/);
+  assert.match(styles, /depth-world \.financial-children \{ inset:210px 0 auto; display:grid/);
+  assert.doesNotMatch(styles, /scroll-snap-type:\s*x mandatory/);
+  assert.doesNotMatch(styles, /\.person-core \{ position:\s*sticky/);
+  assert.doesNotMatch(styles, /depth-universe/);
   for (const anatomy of ["financial-orb__name", "financial-orb__ball", "financial-orb__icon", "financial-orb__value"])
     assert.match(styles, new RegExp(anatomy));
   assert.match(styles, /financial-orb \.financial-orb__icon[^}]+margin:0!important/);
   assert.match(styles, /financial-orb \.financial-orb__icon>svg[^}]+position:static!important/);
   assert.doesNotMatch(styles, /world-(?:cash|investments|liabilities|home|vehicle|lifestyle|cashflow)[^{,]*\.financial-orb__(?:name|ball|icon|value)/);
-  assert.match(styles, /@media \(max-height:700px\) and \(min-width:721px\)/);
+  assert.match(styles, /@media \(max-height:700px\)/);
   assert.match(styles, /max-height:34svh/);
   assert.match(reviewPage, /Only explicitly selected transactions will change/);
   assert.match(reviewPage, /relationshipQueue\.items\.length > 0/);
