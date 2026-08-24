@@ -42,6 +42,8 @@ export type CoverageStatus = "empty" | "partial" | "complete";
 
 export type Movement = { id: string; date: string; name: string; amount: number; direction: "inflow" | "outflow"; category: string };
 export type CategorySummary = { category: string; amount: number; previousAmount: number; change: number | null };
+export type MerchantSummary = { name: string; amount: number; transactions: number };
+export type FinancialInsight = { id: string; title: string; detail: string; evidence: string; tone: "neutral" | "attention" | "positive" };
 
 export type PrototypeView = {
   person: PrototypeState["person"];
@@ -54,6 +56,8 @@ export type PrototypeView = {
   topInflows: Movement[];
   topOutflows: Movement[];
   categories: CategorySummary[];
+  merchants: MerchantSummary[];
+  insights: FinancialInsight[];
   significant: Movement[];
   review: Array<{ id: string; date: string; name: string; amount: number; direction: string; category: string }>;
   recent: Movement[];

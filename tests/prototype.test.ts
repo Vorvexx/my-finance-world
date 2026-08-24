@@ -58,6 +58,13 @@ test("captures an explicitly supplied TD balance without inventing one", () => {
   assert.equal(parseTdCsv(csv, "td-chequing.csv", observedAt).closingBalance, null);
 });
 
+test("supports conservative TD headerless chequing exports and additional dates", () => {
+  const parsed = parseTdCsv("2026/08/01,MARKET,25.00,,975.00\n2026/08/02,PAYROLL,,1000.00,1975.00", "td-chequing.csv", observedAt);
+  assert.equal(parsed.rows.length, 2);
+  assert.equal(parsed.rows[0].date, "2026-08-01");
+  assert.equal(parsed.closingBalance, 1975);
+});
+
 test("encrypted backup round-trips and rejects the wrong passphrase", () => {
   const parsed = parseTdCsv(csv, "td-chequing.csv", observedAt); const ledger = ingestTransactions(parsed.rows);
   const state: PrototypeState = { version: 4, person: { id: "primary-person", name: null }, accounts: [], transactions: [...ledger.transactions], corrections: [], statements: [], facts: [{ id: "fact", kind: "investment", name: "Retirement", value: 1000, effectiveDate: "2026-08-24", updatedAt: observedAt, provenance: "founder" }], updatedAt: observedAt };

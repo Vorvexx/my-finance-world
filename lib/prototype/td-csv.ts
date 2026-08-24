@@ -17,8 +17,13 @@ const amount = (value: string) => Number(value.replace(/[$,\s]/g, "").replace(/^
 const date = (value: string) => {
   const cleaned = value.trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return cleaned;
+  const yearFirst = cleaned.match(/^(\d{4})[\/](\d{1,2})[\/](\d{1,2})$/);
+  if (yearFirst) return `${yearFirst[1]}-${yearFirst[2].padStart(2, "0")}-${yearFirst[3].padStart(2, "0")}`;
   const match = cleaned.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-  if (!match) throw new Error("TD statement contains an unsupported date.");
+  if (!match) {
+    const parsed = new Date(cleaned); if (!/^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}$/.test(cleaned) || Number.isNaN(parsed.valueOf())) throw new Error("TD statement contains an unsupported date.");
+    return parsed.toISOString().slice(0, 10);
+  }
   return `${match[3]}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`;
 };
 const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -28,7 +33,11 @@ export type ParsedTdStatement = { accountId: string; accountType: "chequing" | "
 export const parseTdCsv = (text: string, filename: string, observedAt: string): ParsedTdStatement => {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("Statement has no transaction rows.");
-  const header = parseLine(lines[0]).map(slug);
+  const firstCells = parseLine(lines[0]); const headerless = /^\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}$/.test(firstCells[0] ?? "");
+  const filenameCredit = /credit|visa|mastercard/i.test(filename);
+  if (headerless && firstCells.length < 4) throw new Error("Headerless TD exports require an identifiable account layout.");
+  const header = headerless ? (filenameCredit ? ["date", "description", "amount", "cardnumber"] : ["date", "description", "withdrawals", "deposits", "balance"]) : firstCells.map(slug);
+  const dataLines = headerless ? lines : lines.slice(1);
   const index = (...names: string[]) => names.map((name) => header.indexOf(name)).find((value) => value >= 0) ?? -1;
   const dateIndex = index("date", "transactiondate", "postingdate", "posteddate");
   const descIndex = index("description", "transactiondescription", "merchantname", "details", "transactiondetails");
@@ -39,10 +48,10 @@ export const parseTdCsv = (text: string, filename: string, observedAt: string): 
   const balanceIndex = index("balance", "runningbalance", "currentbalance", "availablebalance");
   const typeIndex = index("accounttype", "producttype");
   if (dateIndex < 0 || descIndex < 0 || (amountIndex < 0 && debitIndex < 0 && creditIndex < 0)) throw new Error("Unsupported TD CSV columns.");
-  const firstData = parseLine(lines[1]);
-  const creditCard = /credit|visa|mastercard/i.test(filename) || (typeIndex >= 0 && /credit|visa|mastercard/i.test(firstData[typeIndex] ?? "")) || (amountIndex >= 0 && debitIndex < 0);
+  const firstData = parseLine(dataLines[0]);
+  const creditCard = filenameCredit || (typeIndex >= 0 && /credit|visa|mastercard/i.test(firstData[typeIndex] ?? "")) || (!headerless && amountIndex >= 0 && debitIndex < 0);
   const rows: RawTransaction[] = [];
-  for (const [position, line] of lines.slice(1).entries()) {
+  for (const [position, line] of dataLines.entries()) {
     const cells = parseLine(line); const transactionDate = date(cells[dateIndex] ?? "");
     const description = cells[descIndex]?.trim(); if (!description) throw new Error("Statement contains a transaction without a description.");
     const rawDebit = debitIndex >= 0 ? amount(cells[debitIndex] || "0") : 0;
@@ -58,7 +67,7 @@ export const parseTdCsv = (text: string, filename: string, observedAt: string): 
     if (position > 10000) throw new Error("Statement exceeds the safe transaction limit.");
   }
   const dates = rows.map((row) => row.date as string).sort();
-  const lastCells = parseLine(lines.at(-1)!);
+  const lastCells = parseLine(dataLines.at(-1)!);
   const parsedBalance = balanceIndex >= 0 ? amount(lastCells[balanceIndex] || "") : Number.NaN;
   return { accountId: rows[0].accountId as string, accountType: creditCard ? "credit-card" : "chequing", rows, startDate: dates[0], endDate: dates.at(-1)!, closingBalance: Number.isFinite(parsedBalance) ? Math.abs(parsedBalance) : null };
 };
