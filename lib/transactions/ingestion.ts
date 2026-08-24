@@ -40,6 +40,7 @@ const canonicalize = (
   const updatedAt = transaction.sourceUpdatedAt ?? transaction.observedAt;
   const description = transaction.description.toUpperCase();
   const financialRole: CanonicalTransaction["financialRole"] =
+    (transaction.source === "td-credit-card-csv-v1" && transaction.direction === "inflow") ||
     /(?:PAYMENT.*(?:VISA|MASTERCARD|AMEX)|(?:VISA|MASTERCARD|AMEX).*PAYMENT)/.test(description)
       ? "credit-card-payment"
       : /(?:TRANSFER|TFR|E-TRANSFER)/.test(description)

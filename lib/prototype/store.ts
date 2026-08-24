@@ -6,7 +6,7 @@ import type { PrototypeState } from "@/types/prototype";
 import { dataRoot, inboxPath, keyPath, quarantinePath, statePath } from "./paths";
 
 const emptyState = (): PrototypeState => ({
-  version: 1,
+  version: 3,
   person: { id: "primary-person", name: null },
   accounts: [], transactions: [], corrections: [], statements: [], updatedAt: null,
 });
@@ -36,9 +36,22 @@ export const loadState = async (): Promise<PrototypeState> => {
     const decipher = createDecipheriv("aes-256-gcm", await loadKey(), Buffer.from(payload.iv, "base64"));
     decipher.setAuthTag(Buffer.from(payload.tag, "base64"));
     const plain = Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]);
-    const state = JSON.parse(plain.toString("utf8")) as PrototypeState;
-    if (state.version !== 1 || !Array.isArray(state.transactions) || !Array.isArray(state.statements)) throw new Error("Unsupported state schema.");
-    return state;
+    const state = JSON.parse(plain.toString("utf8")) as Omit<PrototypeState, "version"> & { version: number };
+    if (![1, 2, 3].includes(state.version) || !Array.isArray(state.transactions) || !Array.isArray(state.statements)) throw new Error("Unsupported state schema.");
+    let changed = false;
+    if (state.version < 3) {
+      state.version = 3;
+      state.accounts = state.accounts.map((account) => ({ ...account, balanceKnown: account.balanceKnown ?? false }));
+      changed = true;
+    }
+    const creditAccounts = new Set(state.statements.filter((statement) => statement.accountType === "credit-card").map((statement) => statement.accountId));
+    state.transactions = state.transactions.map((transaction) => {
+      const payment = (creditAccounts.has(transaction.accountId) && transaction.direction === "inflow") || /(?:PAYMENT.*(?:VISA|MASTERCARD|AMEX)|(?:VISA|MASTERCARD|AMEX).*PAYMENT)/.test(transaction.rawDescription.toUpperCase());
+      if (!payment || transaction.financialRole === "credit-card-payment") return transaction;
+      changed = true; return { ...transaction, financialRole: "credit-card-payment" as const };
+    });
+    if (changed) await saveState(state as PrototypeState);
+    return state as PrototypeState;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptyState();
     throw error;

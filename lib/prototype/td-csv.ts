@@ -51,7 +51,7 @@ export const parseTdCsv = (text: string, filename: string, observedAt: string): 
     const accountHint = (accountIndex >= 0 ? cells[accountIndex] : "") || (creditCard ? "credit-card" : "chequing");
     const accountId = `td-${slug(accountHint).slice(-12) || (creditCard ? "credit-card" : "chequing")}`;
     const fingerprint = createHash("sha256").update(`${accountId}|${transactionDate}|${description}|${value}|${direction}`).digest("hex").slice(0, 24);
-    rows.push({ id: `txn-${fingerprint}`, accountId, date: transactionDate, amount: value, direction, description, status: "posted", sourceRecordId: fingerprint, source: "td-csv-v1", sourceKind: "import", observedAt });
+    rows.push({ id: `txn-${fingerprint}`, accountId, date: transactionDate, amount: value, direction, description, status: "posted", sourceRecordId: fingerprint, source: creditCard ? "td-credit-card-csv-v1" : "td-chequing-csv-v1", sourceKind: "import", observedAt });
     if (position > 10000) throw new Error("Statement exceeds the safe transaction limit.");
   }
   const dates = rows.map((row) => row.date as string).sort();

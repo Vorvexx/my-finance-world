@@ -27,6 +27,7 @@ export type FinancialAccount = {
   type: AccountType;
   group: LegacyAccountGroup;
   updatedAt: string;
+  balanceKnown?: boolean;
 };
 
 export type AccountForm = {

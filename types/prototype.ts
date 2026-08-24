@@ -15,7 +15,7 @@ export type StatementRecord = {
 };
 
 export type PrototypeState = {
-  version: 1;
+  version: 3;
   person: { id: "primary-person"; name: string | null };
   accounts: FinancialAccount[];
   transactions: CanonicalTransaction[];

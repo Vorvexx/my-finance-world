@@ -32,7 +32,7 @@ test("stable fingerprints deduplicate overlapping statement rows", () => {
 test("payments are excluded from spending and partial coverage remains explicit", () => {
   const parsed = parseTdCsv(csv, "td-chequing.csv", observedAt);
   const ledger = ingestTransactions(parsed.rows);
-  const state: PrototypeState = { version: 1, person: { id: "primary-person", name: null }, accounts: [], transactions: [...ledger.transactions], corrections: [], statements: [{ id: "statement", filename: "td-chequing.csv", provider: "td", accountId: parsed.accountId, accountType: "chequing", importedAt: observedAt, startDate: parsed.startDate, endDate: parsed.endDate, transactionCount: 3, duplicateCount: 0 }], updatedAt: observedAt };
+  const state: PrototypeState = { version: 3, person: { id: "primary-person", name: null }, accounts: [], transactions: [...ledger.transactions], corrections: [], statements: [{ id: "statement", filename: "td-chequing.csv", provider: "td", accountId: parsed.accountId, accountType: "chequing", importedAt: observedAt, startDate: parsed.startDate, endDate: parsed.endDate, transactionCount: 3, duplicateCount: 0 }], updatedAt: observedAt };
   const view = buildPrototypeView(state, "month", "2026-08-31");
   assert.equal(view.totals.inflow, 3000);
   assert.equal(view.totals.spending, 120.5);
@@ -43,4 +43,10 @@ test("payments are excluded from spending and partial coverage remains explicit"
 
 test("unsupported statement shapes fail closed", () => {
   assert.throws(() => parseTdCsv("Thing,Value\nA,1", "unknown.csv", observedAt), /Unsupported TD CSV columns/);
+});
+
+test("credit-card inflows are payments, never income", () => {
+  const parsed = parseTdCsv("Date,Description,Amount,Card Number\n08/04/2026,PAYMENT THANK YOU,-850.00,5678", "td-credit-card.csv", observedAt);
+  const transaction = ingestTransactions(parsed.rows).transactions[0];
+  assert.equal(transaction.financialRole, "credit-card-payment");
 });

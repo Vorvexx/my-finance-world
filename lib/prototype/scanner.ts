@@ -35,10 +35,14 @@ export const scanInbox = async () => {
       const statement: StatementRecord = { id: fileId, filename, provider: "td", accountId: parsed.accountId, accountType: parsed.accountType, importedAt, startDate: parsed.startDate, endDate: parsed.endDate, transactionCount: parsed.rows.length, duplicateCount: ledger.duplicateCount };
       const existingAccount = state.accounts.find((account) => account.id === parsed.accountId);
       if (!existingAccount) {
-        const account: FinancialAccount = { id: parsed.accountId, name: parsed.accountType === "chequing" ? "TD Chequing" : "TD Credit Card", institution: "TD", balance: 0, type: parsed.accountType === "chequing" ? "asset" : "liability", group: parsed.accountType === "chequing" ? "cash" : "debts", updatedAt: importedAt };
+        const account: FinancialAccount = { id: parsed.accountId, name: parsed.accountType === "chequing" ? "TD Chequing" : "TD Credit Card", institution: "TD", balance: 0, balanceKnown: false, type: parsed.accountType === "chequing" ? "asset" : "liability", group: parsed.accountType === "chequing" ? "cash" : "debts", updatedAt: importedAt };
         state.accounts.push(account);
       }
-      state.transactions = [...ledger.transactions]; state.statements.push(statement); state.updatedAt = importedAt;
+      const establishedRoles = new Map(state.transactions.map((transaction) => [transaction.id, transaction.financialRole]));
+      state.transactions = ledger.transactions.map((transaction) => {
+        const role = establishedRoles.get(transaction.id);
+        return role === "transfer" || role === "credit-card-payment" ? { ...transaction, financialRole: role } : transaction;
+      }); state.statements.push(statement); state.updatedAt = importedAt;
       await saveState(state); await unlink(sourcePath); result.processed += 1;
     } catch (error) {
       result.quarantined += 1; result.errors.push(`${filename}: ${error instanceof Error ? error.message : "Import failed."}`);

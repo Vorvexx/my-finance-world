@@ -1,5 +1,5 @@
 import type { CanonicalTransaction } from "@/types/transactions";
-import type { PeriodKey, PrototypeState, PrototypeView, Movement } from "@/types/prototype";
+import type { CoverageStatus, PeriodKey, PrototypeState, PrototypeView, Movement } from "@/types/prototype";
 
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 const addDays = (date: Date, days: number) => { const copy = new Date(date); copy.setUTCDate(copy.getUTCDate() + days); return copy; };
@@ -42,27 +42,31 @@ export const buildPrototypeView = (state: PrototypeState, periodKey: PeriodKey =
   const missingRanges: string[] = []; let gapStart: string | null = null;
   for (let d = new Date(start); d <= end; d = addDays(d, 1)) { const key = iso(d); if (!statementDates.has(key) && !gapStart) gapStart = key; if (statementDates.has(key) && gapStart) { missingRanges.push(`${gapStart}–${iso(addDays(d, -1))}`); gapStart = null; } }
   if (gapStart) missingRanges.push(`${gapStart}–${iso(end)}`);
-  const coverageStatus = transactions.length === 0 ? "empty" : missingRanges.length ? "partial" : "complete";
-  const review = state.transactions.filter((t) => t.attribution.method === "unclassified").map((t) => ({ id: t.id, date: t.date, name: t.normalizedCounterparty, amount: t.amount, direction: t.direction, category: t.attribution.category }));
+  // TD transaction CSVs expose activity rows, not an authoritative no-activity calendar.
+  // They can prove available history and gaps outside their span, but not complete coverage.
+  const coverageStatus: CoverageStatus = transactions.length === 0 ? "empty" : "partial";
+  const review = state.transactions.filter((t) => t.attribution.method === "unclassified" && (t.financialRole === "income" || t.financialRole === "spending")).map((t) => ({ id: t.id, date: t.date, name: t.normalizedCounterparty, amount: t.amount, direction: t.direction, category: t.attribution.category }));
   const inflows = transactions.filter((t) => t.financialRole === "income").sort((a, b) => b.amount - a.amount).map(movement);
   const outflows = spending.sort((a, b) => b.amount - a.amount).map(movement);
   const recurringGroups = new Map<string, CanonicalTransaction[]>(); state.transactions.filter((t) => t.financialRole === "spending").forEach((t) => recurringGroups.set(t.normalizedCounterparty, [...(recurringGroups.get(t.normalizedCounterparty) ?? []), t]));
   const recurring = [...recurringGroups].filter(([, items]) => items.length >= 2).map(([name, items]) => ({ name, averageAmount: money(items.reduce((sum, t) => sum + cents(t.amount), 0) / items.length), occurrences: items.length, nextExpectedDate: null })).sort((a, b) => b.occurrences - a.occurrences).slice(0, 5);
-  const cash = state.accounts.filter((a) => a.group === "cash").reduce((sum, a) => sum + a.balance, 0);
-  const debt = state.accounts.filter((a) => a.type === "liability").reduce((sum, a) => sum + a.balance, 0);
-  const partial = coverageStatus === "complete" ? "known" : coverageStatus === "empty" ? "unknown" : "partial";
+  const knownCash = state.accounts.filter((a) => a.group === "cash" && a.balanceKnown !== false);
+  const knownDebt = state.accounts.filter((a) => a.type === "liability" && a.balanceKnown !== false);
+  const cash = knownCash.reduce((sum, a) => sum + a.balance, 0);
+  const debt = knownDebt.reduce((sum, a) => sum + a.balance, 0);
+  const partial = coverageStatus === "empty" ? "unknown" : "partial";
   return {
     person: state.person, accounts: state.accounts, statements: state.statements,
     period: { key: periodKey, startDate: iso(start), endDate: iso(end), label: `${iso(start)} – ${iso(end)}` },
-    coverage: { status: coverageStatus, availableStart, availableEnd, missingRanges, message: coverageStatus === "complete" ? "Statement evidence covers this period." : coverageStatus === "empty" ? "No transactions are available for this period." : `Partial history: ${missingRanges.length} uncovered range${missingRanges.length === 1 ? "" : "s"}.` },
+    coverage: { status: coverageStatus, availableStart, availableEnd, missingRanges, message: coverageStatus === "empty" ? "No transactions are available for this period." : missingRanges.length ? `Partial history: ${missingRanges.length} uncovered range${missingRanges.length === 1 ? "" : "s"}.` : "Partial history: transaction rows span this period, but the CSV does not prove days without activity." },
     totals, previous: previousTransactions.length ? { inflow: previousTotals.inflow, spending: previousTotals.spending, net: previousTotals.net } : null,
     topInflows: inflows.slice(0, 3), topOutflows: outflows.slice(0, 3), categories, significant: [...inflows, ...outflows].sort((a, b) => b.amount - a.amount).slice(0, 5), review,
     recent: state.transactions.slice(0, 8).map(movement), recurring,
     worlds: {
-      cash: { status: state.accounts.some((a) => a.group === "cash") ? "known" : "unknown", value: state.accounts.some((a) => a.group === "cash") ? cash : null, detail: "Recorded cash-account balance" },
+      cash: { status: knownCash.length ? "known" : "unknown", value: knownCash.length ? cash : null, detail: knownCash.length ? "Recorded cash-account balance" : "Statements loaded; current balance remains Unknown" },
       cashflow: { status: partial, value: totals.net, detail: `${totals.inflow.toFixed(2)} in · ${totals.spending.toFixed(2)} spent` },
       lifestyle: { status: partial, value: totals.spending, detail: categories[0] ? `Largest category: ${categories[0].category}` : "No categorized spending" },
-      liabilities: { status: state.accounts.some((a) => a.type === "liability") ? "known" : "unknown", value: state.accounts.some((a) => a.type === "liability") ? debt : null, detail: "Recorded liability balance" },
+      liabilities: { status: knownDebt.length ? "known" : "unknown", value: knownDebt.length ? debt : null, detail: knownDebt.length ? "Recorded liability balance" : "Statements loaded; current balance remains Unknown" },
       home: { status: "unknown", value: null, detail: "No authoritative Home facts recorded" }, vehicle: { status: "unknown", value: null, detail: "No authoritative Vehicle facts recorded" },
       statements: { status: state.statements.length ? "known" : "unknown", value: state.statements.length, detail: `${state.transactions.length} canonical transactions` },
       review: { status: review.length ? "partial" : "known", value: review.length, detail: review.length ? "Unclassified activity needs context" : "No items currently need review" },
