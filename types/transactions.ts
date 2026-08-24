@@ -51,6 +51,7 @@ export type CanonicalTransaction = {
   provenance: TransactionProvenance;
   createdAt: string;
   updatedAt: string;
+  financialRole: "income" | "spending" | "transfer" | "credit-card-payment" | "other";
 };
 
 export type TransactionCorrection = {

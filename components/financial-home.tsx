@@ -1,163 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import type { CanonicalFinancialModel, MoneyWorldKey } from "@/types/finance";
+import { useEffect, useState } from "react";
+import type { PeriodKey, PrototypeView } from "@/types/prototype";
 
-const formatMoney = (value: number, currency: string) =>
-  new Intl.NumberFormat("en-CA", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+const cad = (value: number | null) => value == null ? "Unknown" : new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(value);
+const periods: Array<{ key: PeriodKey; label: string }> = [{ key: "day", label: "Day" }, { key: "week", label: "Week" }, { key: "fortnight", label: "Fortnight" }, { key: "month", label: "Month" }, { key: "quarter", label: "Quarter" }, { key: "year", label: "Year" }];
+const worldMeta = { cash: ["Cash", "Available position", "◉"], cashflow: ["Cashflow", "Movement through time", "↕"], lifestyle: ["Lifestyle", "How life appears in money", "✦"], liabilities: ["Liabilities", "Recorded commitments", "−"], home: ["Home", "Property world", "⌂"], vehicle: ["Vehicle", "Mobility world", "◇"], statements: ["Statements", "Financial evidence", "▤"], review: ["Review", "Your context", "?"], } as const;
 
-const worldDefinitions: ReadonlyArray<{
-  key: MoneyWorldKey;
-  name: string;
-  description: string;
-  icon: string;
-}> = [
-  { key: "cash", name: "Cash", description: "Money available now", icon: "↙" },
-  { key: "investments", name: "Investments", description: "Long-term financial assets", icon: "↗" },
-  { key: "home", name: "Home", description: "Property and related commitments", icon: "⌂" },
-  { key: "vehicle", name: "Vehicle", description: "Vehicle value and financing", icon: "◇" },
-  { key: "creditDebt", name: "Credit / Debt", description: "Balances currently owed", icon: "−" },
-  { key: "income", name: "Income", description: "Money entering your world", icon: "+" },
-  { key: "upcoming", name: "Upcoming", description: "Known future financial events", icon: "○" },
-  { key: "future", name: "Future Worlds", description: "Worlds not yet recorded", icon: "∞" },
-];
-
-export default function FinancialHome({ model }: { model: CanonicalFinancialModel }) {
-  const [selectedWorld, setSelectedWorld] = useState<MoneyWorldKey | null>(null);
-  const { summary, money, accountsByWorld, totalsByWorld } = model;
-  const moneyLabel = (value: number | null | undefined) =>
-    value == null ? "Unknown" : formatMoney(value, money.currency);
-
-  return (
-    <main className="min-h-screen bg-[#071018] text-[#f4f7f5]">
-      <div className="mx-auto max-w-[1440px] px-5 py-6 md:px-9 md:py-9">
-        <header className="border-b border-white/10 pb-7">
-          <p className="text-xs font-bold uppercase tracking-[0.26em] text-emerald-400">My Finance World</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">Your financial position</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            {money.lastUpdated ? `Financial snapshot · ${money.lastUpdated}` : "Financial snapshot unavailable"}
-          </p>
-        </header>
-
-        {model.status !== "loaded" && (
-          <section className="mt-6 rounded-[28px] border border-amber-300/25 bg-amber-300/[0.07] p-6">
-            <h2 className="text-lg font-semibold text-amber-100">{model.statusMessage}</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              Vorvex is ready, but financial values will remain Unknown until a valid private snapshot is available.
-            </p>
-          </section>
-        )}
-
-        <section className="mt-6 grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-          <article className="relative overflow-hidden rounded-[32px] border border-emerald-400/20 bg-[radial-gradient(circle_at_25%_20%,rgba(52,211,153,0.17),transparent_42%),#0b1821] p-7 md:p-9">
-            <p className="text-sm font-medium text-emerald-200">Your current net worth</p>
-            <p className="mt-3 text-5xl font-semibold tracking-[-0.06em] md:text-7xl">
-              {moneyLabel(summary?.netWorth)}
-            </p>
-            <p className="mt-4 max-w-xl text-sm leading-6 text-slate-400">
-              What is recorded as owned, minus what is recorded as owed. Unknown Worlds are excluded rather than estimated.
-            </p>
-            <div className="mt-9 grid grid-cols-2 gap-3 md:max-w-lg">
-              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                <p className="text-xs text-slate-500">Assets</p>
-                <p className="mt-1 text-lg font-semibold text-emerald-300">{moneyLabel(summary?.totalAssets)}</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                <p className="text-xs text-slate-500">Liabilities</p>
-                <p className="mt-1 text-lg font-semibold text-rose-300">{moneyLabel(summary?.totalLiabilities)}</p>
-              </div>
-            </div>
-          </article>
-
-          <article className="rounded-[32px] border border-white/10 bg-[#0b1821] p-7">
-            <p className="text-sm text-slate-400">Source integrity</p>
-            <h2 className="mt-2 text-2xl font-semibold">Canonical financial model</h2>
-            <dl className="mt-7 space-y-4 text-sm">
-              <div className="flex justify-between border-b border-white/10 pb-4">
-                <dt className="text-slate-500">Accounts</dt>
-                <dd>{money.accounts.length}</dd>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-4">
-                <dt className="text-slate-500">Currency</dt>
-                <dd>{money.currency}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-slate-500">Last updated</dt>
-                <dd>{money.lastUpdated ?? "Unknown"}</dd>
-              </div>
-            </dl>
-            <p className="mt-7 rounded-2xl bg-white/[0.04] p-4 text-sm leading-6 text-slate-300">
-              No sample balances, activity, income, property values, or upcoming events are included.
-            </p>
-          </article>
-        </section>
-
-        <section className="mt-10">
-          <div>
-            <h2 className="text-xl font-semibold">Money across your Worlds</h2>
-            <p className="mt-1 text-sm text-slate-500">Select a World to see the records that support its position.</p>
-          </div>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {worldDefinitions.map((definition) => {
-              const world = money.worlds[definition.key];
-              const accounts = accountsByWorld[definition.key];
-              const total = totalsByWorld[definition.key];
-              const isOpen = selectedWorld === definition.key;
-
-              return (
-                <article
-                  key={definition.key}
-                  className={`rounded-3xl border p-5 transition ${
-                    isOpen
-                      ? "border-emerald-400/40 bg-emerald-400/[0.07]"
-                      : "border-white/10 bg-[#0b1821]"
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedWorld(isOpen ? null : definition.key)}
-                    className="w-full text-left"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-lg text-emerald-300">
-                      {definition.icon}
-                    </span>
-                    <p className="mt-5 font-semibold">{definition.name}</p>
-                    <p className="mt-1 text-xl font-semibold">
-                      {moneyLabel(total)}
-                    </p>
-                    <p className="mt-2 text-xs text-slate-500">{definition.description}</p>
-                  </button>
-
-                  {isOpen && (
-                    <div className="mt-4 space-y-2 border-t border-white/10 pt-4">
-                      {world.status === "unknown" ? (
-                        <p className="text-xs leading-5 text-slate-400">{world.reason}</p>
-                      ) : (
-                        accounts.map((account) => (
-                          <div key={account.id} className="rounded-xl bg-white/[0.035] p-3 text-xs">
-                            <div className="flex justify-between gap-3">
-                              <span className="truncate text-slate-300">{account.name}</span>
-                              <span className={account.type === "liability" ? "text-rose-300" : "text-emerald-300"}>
-                                {formatMoney(account.balance, money.currency)}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-slate-500">{account.institution}</p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-    </main>
-  );
+export default function FinancialHome() {
+  const [period, setPeriod] = useState<PeriodKey>("month"); const [view, setView] = useState<PrototypeView | null>(null);
+  const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(""); const [selected, setSelected] = useState<keyof typeof worldMeta | null>("cashflow");
+  const [question, setQuestion] = useState("What happened financially this month?"); const [answer, setAnswer] = useState(""); const [asking, setAsking] = useState(false);
+  const load = async (nextPeriod = period) => { setLoading(true); setNotice(""); try { const response = await fetch(`/api/prototype?period=${nextPeriod}`, { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setView(data); } catch (error) { setNotice(error instanceof Error ? error.message : "Financial state is unavailable."); } finally { setLoading(false); } };
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/prototype?period=${period}`, { cache: "no-store" })
+      .then(async (response) => ({ response, data: await response.json() }))
+      .then(({ response, data }) => { if (!response.ok) throw new Error(data.error); if (active) setView(data); })
+      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Financial state is unavailable."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [period]);
+  const scan = async () => { setLoading(true); const response = await fetch("/api/prototype/scan", { method: "POST" }); const result = await response.json(); setNotice(response.ok ? `${result.processed} statement(s) processed · ${result.duplicates} duplicate(s) · ${result.quarantined} quarantined${result.errors?.length ? ` — ${result.errors.join(" ")}` : ""}` : result.error); await load(); };
+  const ask = async () => { if (!question.trim()) return; setAsking(true); const response = await fetch("/api/prototype/assistant", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, period }) }); const result = await response.json(); setAnswer(result.answer ?? result.error); setAsking(false); };
+  const correct = async (id: string) => { const category = window.prompt("What category should this be?", "Other"); if (!category) return; await fetch("/api/prototype/corrections", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transactionId: id, world: "future", category }) }); await load(); };
+  return <main className="universe-shell">
+    <header className="topbar"><div><p className="eyebrow">VORVEX · MY FINANCE WORLD</p><h1>Your living financial universe</h1></div><div className="top-actions"><span className={`coverage ${view?.coverage.status ?? "empty"}`}>{view?.coverage.status ?? "Loading"} history</span><button onClick={scan} disabled={loading}>Scan inbox</button></div></header>
+    <nav className="periods" aria-label="Financial period">{periods.map((item) => <button key={item.key} className={period === item.key ? "active" : ""} onClick={() => setPeriod(item.key)}>{item.label}</button>)}</nav>
+    {notice && <div className="notice" role="status">{notice}</div>}
+    {loading && !view ? <section className="loading-state">Constructing your financial universe…</section> : view && <>
+      <section className="person-core"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="person"><span>YOU</span><strong>{cad(view.totals.net)}</strong><small>net movement · {view.period.label}</small></div><div className="pulse inflow"><small>Inflows</small><strong>{cad(view.totals.inflow)}</strong></div><div className="pulse outflow"><small>Spending</small><strong>{cad(view.totals.spending)}</strong></div></section>
+      <section className="coverage-panel"><div><strong>{view.coverage.message}</strong><span>Available: {view.coverage.availableStart ?? "Unknown"} → {view.coverage.availableEnd ?? "Unknown"}</span></div>{view.coverage.missingRanges.length > 0 && <span>Missing: {view.coverage.missingRanges.slice(0, 2).join(", ")}</span>}</section>
+      <section className="world-grid">{Object.entries(worldMeta).map(([key, meta]) => { const world = view.worlds[key as keyof typeof view.worlds]; return <article key={key} className={`world-card ${selected === key ? "selected" : ""}`}><button onClick={() => setSelected(selected === key ? null : key as keyof typeof worldMeta)}><span className="world-icon">{meta[2]}</span><span><small>{meta[1]}</small><strong>{meta[0]}</strong></span><b>{cad(world.value)}</b></button><p>{world.detail}</p><span className={`state ${world.status}`}>{world.status}</span></article>; })}</section>
+      <section className="intelligence-grid">
+        <article className="panel"><p className="eyebrow">SIGNIFICANT MOVEMENTS</p><h2>What shaped this period</h2><div className="movement-list">{view.significant.length ? view.significant.map((item) => <div key={item.id}><span><strong>{item.name}</strong><small>{item.date} · {item.category}</small></span><b className={item.direction}>{item.direction === "inflow" ? "+" : "−"}{cad(item.amount)}</b></div>) : <p className="empty">No recorded movements in this period.</p>}</div></article>
+        <article className="panel"><p className="eyebrow">LIFESTYLE SIGNALS</p><h2>Spending by context</h2><div className="category-list">{view.categories.slice(0, 5).map((category) => <div key={category.category}><span>{category.category}</span><span className="bar"><i style={{ width: `${Math.max(8, category.amount / Math.max(view.categories[0]?.amount ?? 1, 1) * 100)}%` }}/></span><b>{cad(category.amount)}</b></div>)}{!view.categories.length && <p className="empty">Categories will appear when statements provide spending evidence.</p>}</div>{view.previous && <p className="comparison">Previous-period spending: {cad(view.previous.spending)}</p>}</article>
+        <article className="panel review-panel"><p className="eyebrow">NEEDS REVIEW</p><h2>{view.review.length} item{view.review.length === 1 ? "" : "s"} need your context</h2>{view.review.slice(0, 4).map((item) => <button key={item.id} onClick={() => correct(item.id)}><span>{item.name}<small>{item.date}</small></span><b>{cad(item.amount)}</b></button>)}{!view.review.length && <p className="empty">Everything currently has a supported classification.</p>}</article>
+      </section>
+      <section className="assistant-panel"><div><p className="eyebrow">VORVEX ASSISTANT · LOCAL & GROUNDED</p><h2>Ask your financial world</h2><p>Answers come only from canonical data. Partial and Unknown remain explicit.</p></div><div className="assistant-box"><div className="ask-row"><input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void ask()} aria-label="Ask Vorvex"/><button onClick={ask} disabled={asking}>{asking ? "Reading…" : "Ask"}</button></div>{answer && <div className="answer">{answer}</div>}<div className="suggestions">{["How much did I spend?", "What needs review?", "What data is missing?"].map((text) => <button key={text} onClick={() => setQuestion(text)}>{text}</button>)}</div></div></section>
+    </>}
+    <footer>Local financial data never leaves this device · State {view?.updatedAt ? `saved ${new Date(view.updatedAt).toLocaleString("en-CA")}` : "not yet created"}</footer>
+  </main>;
 }
