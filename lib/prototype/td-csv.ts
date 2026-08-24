@@ -23,21 +23,24 @@ const date = (value: string) => {
 };
 const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
-export type ParsedTdStatement = { accountId: string; accountType: "chequing" | "credit-card"; rows: RawTransaction[]; startDate: string; endDate: string };
+export type ParsedTdStatement = { accountId: string; accountType: "chequing" | "credit-card"; rows: RawTransaction[]; startDate: string; endDate: string; closingBalance: number | null };
 
 export const parseTdCsv = (text: string, filename: string, observedAt: string): ParsedTdStatement => {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("Statement has no transaction rows.");
   const header = parseLine(lines[0]).map(slug);
   const index = (...names: string[]) => names.map((name) => header.indexOf(name)).find((value) => value >= 0) ?? -1;
-  const dateIndex = index("date", "transactiondate");
-  const descIndex = index("description", "transactiondescription", "merchantname");
-  const debitIndex = index("withdrawals", "withdrawal", "debit");
-  const creditIndex = index("deposits", "deposit", "credit");
-  const amountIndex = index("amount");
-  const accountIndex = index("account", "accountnumber", "cardnumber");
+  const dateIndex = index("date", "transactiondate", "postingdate", "posteddate");
+  const descIndex = index("description", "transactiondescription", "merchantname", "details", "transactiondetails");
+  const debitIndex = index("withdrawals", "withdrawal", "debit", "debitamount");
+  const creditIndex = index("deposits", "deposit", "credit", "creditamount");
+  const amountIndex = index("amount", "transactionamount");
+  const accountIndex = index("account", "accountnumber", "cardnumber", "accountid");
+  const balanceIndex = index("balance", "runningbalance", "currentbalance", "availablebalance");
+  const typeIndex = index("accounttype", "producttype");
   if (dateIndex < 0 || descIndex < 0 || (amountIndex < 0 && debitIndex < 0 && creditIndex < 0)) throw new Error("Unsupported TD CSV columns.");
-  const creditCard = /credit|visa|mastercard/i.test(filename) || (amountIndex >= 0 && debitIndex < 0);
+  const firstData = parseLine(lines[1]);
+  const creditCard = /credit|visa|mastercard/i.test(filename) || (typeIndex >= 0 && /credit|visa|mastercard/i.test(firstData[typeIndex] ?? "")) || (amountIndex >= 0 && debitIndex < 0);
   const rows: RawTransaction[] = [];
   for (const [position, line] of lines.slice(1).entries()) {
     const cells = parseLine(line); const transactionDate = date(cells[dateIndex] ?? "");
@@ -55,5 +58,7 @@ export const parseTdCsv = (text: string, filename: string, observedAt: string): 
     if (position > 10000) throw new Error("Statement exceeds the safe transaction limit.");
   }
   const dates = rows.map((row) => row.date as string).sort();
-  return { accountId: rows[0].accountId as string, accountType: creditCard ? "credit-card" : "chequing", rows, startDate: dates[0], endDate: dates.at(-1)! };
+  const lastCells = parseLine(lines.at(-1)!);
+  const parsedBalance = balanceIndex >= 0 ? amount(lastCells[balanceIndex] || "") : Number.NaN;
+  return { accountId: rows[0].accountId as string, accountType: creditCard ? "credit-card" : "chequing", rows, startDate: dates[0], endDate: dates.at(-1)!, closingBalance: Number.isFinite(parsedBalance) ? Math.abs(parsedBalance) : null };
 };

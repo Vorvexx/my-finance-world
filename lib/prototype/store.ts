@@ -6,9 +6,9 @@ import type { PrototypeState } from "@/types/prototype";
 import { dataRoot, inboxPath, keyPath, quarantinePath, statePath } from "./paths";
 
 const emptyState = (): PrototypeState => ({
-  version: 3,
+  version: 4,
   person: { id: "primary-person", name: null },
-  accounts: [], transactions: [], corrections: [], statements: [], updatedAt: null,
+  accounts: [], transactions: [], corrections: [], statements: [], facts: [], updatedAt: null,
 });
 
 const ensureRuntime = async () => {
@@ -37,11 +37,16 @@ export const loadState = async (): Promise<PrototypeState> => {
     decipher.setAuthTag(Buffer.from(payload.tag, "base64"));
     const plain = Buffer.concat([decipher.update(Buffer.from(payload.data, "base64")), decipher.final()]);
     const state = JSON.parse(plain.toString("utf8")) as Omit<PrototypeState, "version"> & { version: number };
-    if (![1, 2, 3].includes(state.version) || !Array.isArray(state.transactions) || !Array.isArray(state.statements)) throw new Error("Unsupported state schema.");
+    if (![1, 2, 3, 4].includes(state.version) || !Array.isArray(state.transactions) || !Array.isArray(state.statements)) throw new Error("Unsupported state schema.");
     let changed = false;
     if (state.version < 3) {
-      state.version = 3;
       state.accounts = state.accounts.map((account) => ({ ...account, balanceKnown: account.balanceKnown ?? false }));
+      changed = true;
+    }
+    if (state.version < 4) {
+      state.version = 4;
+      state.facts = [];
+      state.statements = state.statements.map((statement) => ({ ...statement, balanceCaptured: false }));
       changed = true;
     }
     const creditAccounts = new Set(state.statements.filter((statement) => statement.accountType === "credit-card").map((statement) => statement.accountId));

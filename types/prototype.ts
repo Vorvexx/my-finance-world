@@ -12,15 +12,28 @@ export type StatementRecord = {
   endDate: string;
   transactionCount: number;
   duplicateCount: number;
+  balanceCaptured: boolean;
+};
+
+export type FounderFactKind = "cash" | "investment" | "liability" | "home" | "mortgage" | "vehicle" | "vehicle-financing";
+export type FounderFact = {
+  id: string;
+  kind: FounderFactKind;
+  name: string;
+  value: number;
+  effectiveDate: string;
+  updatedAt: string;
+  provenance: "founder";
 };
 
 export type PrototypeState = {
-  version: 3;
+  version: 4;
   person: { id: "primary-person"; name: string | null };
   accounts: FinancialAccount[];
   transactions: CanonicalTransaction[];
   corrections: TransactionCorrection[];
   statements: StatementRecord[];
+  facts: FounderFact[];
   updatedAt: string | null;
 };
 
@@ -44,9 +57,12 @@ export type PrototypeView = {
   significant: Movement[];
   review: Array<{ id: string; date: string; name: string; amount: number; direction: string; category: string }>;
   recent: Movement[];
-  recurring: Array<{ name: string; averageAmount: number; occurrences: number; nextExpectedDate: string | null }>;
-  worlds: Record<"cash" | "cashflow" | "lifestyle" | "liabilities" | "home" | "vehicle" | "statements" | "review", { status: "known" | "partial" | "unknown"; value: number | null; detail: string }>;
+  recurring: Array<{ name: string; averageAmount: number; occurrences: number; nextExpectedDate: string | null; confidence: "evidence-based prediction" }>;
+  facts: FounderFact[];
+  position: { assets: number | null; liabilities: number | null; netWorth: number | null };
+  worlds: Record<"cash" | "cashflow" | "lifestyle" | "investments" | "liabilities" | "home" | "vehicle" | "statements" | "review" | "upcoming", { status: "known" | "partial" | "unknown"; value: number | null; detail: string }>;
   updatedAt: string | null;
 };
 
 export type CorrectionInput = { transactionId: string; world: MoneyWorldKey | null; category: string };
+export type FounderFactInput = Omit<FounderFact, "id" | "updatedAt" | "provenance"> & { id?: string };

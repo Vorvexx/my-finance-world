@@ -32,11 +32,13 @@ export const scanInbox = async () => {
         sourceKind: transaction.provenance.sourceKind, observedAt: transaction.provenance.observedAt,
         sourceUpdatedAt: transaction.provenance.sourceUpdatedAt,
       })), ...parsed.rows], { corrections: state.corrections });
-      const statement: StatementRecord = { id: fileId, filename, provider: "td", accountId: parsed.accountId, accountType: parsed.accountType, importedAt, startDate: parsed.startDate, endDate: parsed.endDate, transactionCount: parsed.rows.length, duplicateCount: ledger.duplicateCount };
+      const statement: StatementRecord = { id: fileId, filename, provider: "td", accountId: parsed.accountId, accountType: parsed.accountType, importedAt, startDate: parsed.startDate, endDate: parsed.endDate, transactionCount: parsed.rows.length, duplicateCount: ledger.duplicateCount, balanceCaptured: parsed.closingBalance != null };
       const existingAccount = state.accounts.find((account) => account.id === parsed.accountId);
       if (!existingAccount) {
-        const account: FinancialAccount = { id: parsed.accountId, name: parsed.accountType === "chequing" ? "TD Chequing" : "TD Credit Card", institution: "TD", balance: 0, balanceKnown: false, type: parsed.accountType === "chequing" ? "asset" : "liability", group: parsed.accountType === "chequing" ? "cash" : "debts", updatedAt: importedAt };
+        const account: FinancialAccount = { id: parsed.accountId, name: parsed.accountType === "chequing" ? "TD Chequing" : "TD Credit Card", institution: "TD", balance: parsed.closingBalance ?? 0, balanceKnown: parsed.closingBalance != null, type: parsed.accountType === "chequing" ? "asset" : "liability", group: parsed.accountType === "chequing" ? "cash" : "debts", updatedAt: importedAt };
         state.accounts.push(account);
+      } else if (parsed.closingBalance != null && parsed.endDate >= existingAccount.updatedAt.slice(0, 10)) {
+        existingAccount.balance = parsed.closingBalance; existingAccount.balanceKnown = true; existingAccount.updatedAt = importedAt;
       }
       const establishedRoles = new Map(state.transactions.map((transaction) => [transaction.id, transaction.financialRole]));
       state.transactions = ledger.transactions.map((transaction) => {

@@ -6,11 +6,7 @@ This runbook operates the local Founder prototype without exposing financial dat
 
 ## Start
 
-```bash
-npm ci
-npm run build
-npm start -- -H 127.0.0.1
-```
+Double-click `scripts/launch-vorvex.command`. On first use it installs/builds what is missing, opens the browser, and starts Vorvex on the local device. The terminal window remains open while Vorvex runs.
 
 Open `http://127.0.0.1:3000`.
 
@@ -33,14 +29,19 @@ Vorvex reads only the configured inbox. Set `VORVEX_DATA_DIR` before launch to u
 
 Current balances, Home values, and Vehicle values remain Unknown when statements do not contain authoritative facts.
 
+Use **Authoritative Founder Facts** for current cash, investment, liability, property, mortgage, vehicle, and vehicle-financing values that statements cannot prove. These facts retain Founder provenance and do not overwrite statement evidence.
+
 ## Persistence and recovery
 
 Canonical state is AES-256-GCM encrypted. The local key and encrypted state are separate files with owner-only permissions. Writes use a temporary file followed by an atomic rename. Schema migration preserves earlier prototype state.
 
 Back up the complete configured data root together; the encrypted state cannot be recovered without its key. Never commit or send that directory.
 
+For portable recovery, use **Encrypted backup & restore** in the application. The `.vorvex` backup is encrypted with a Founder-chosen passphrase of at least 12 characters. The passphrase is never stored or embedded. Restore authenticates and validates the complete backup before atomically replacing authoritative state; a wrong passphrase or incompatible backup fails without changing current state.
+
 ## Supported boundary
 
 - Supported now: TD transaction CSV layouts containing date, description, and withdrawal/deposit or amount fields.
 - Fail-closed now: PDF, OFX/QFX, unknown CSV layouts, zero or invalid amounts, invalid dates, and files over 10 MB.
-- Deferred: authoritative statement balances, explicit statement-period metadata, additional institutions, automatic refresh, and encrypted user-controlled backup tooling.
+- Deferred: explicit statement-period metadata where exports do not provide it, additional institutions, and automatic refresh.
+- Source boundary: statements, future bank APIs, and Founder facts remain edge adapters into the same canonical encrypted model. Worlds and the Assistant do not consume provider formats.
