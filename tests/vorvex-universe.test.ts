@@ -39,7 +39,13 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
   assert.match(component, /setSelectedAccount\(account\)/);
   assert.match(component, /const hudContextKey =/);
   assert.match(component, /circulationChildren/);
-  assert.match(component, /circulationGroups\.length === 0 \? "receded" : "idle"/);
+  assert.match(component, /circulationGroups\.length === 0 && cardGroups\.length === 0 \? "receded" : "idle"/);
+  assert.match(component, /Latest recorded position/);
+  assert.match(component, /Period flow/);
+  assert.match(component, /cardProjectionChildren/);
+  assert.match(component, /semanticType="snapshot"/);
+  assert.match(component, /semanticType: "period-flow"/);
+  assert.match(component, /financial-orb--position/);
   assert.match(component, /Everyday circulation/);
   assert.match(component, /selectWorld\(selected\)/);
   assert.match(component, /Around \{item\.date\}/);
@@ -50,6 +56,15 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
   assert.doesNotMatch(component, /orbit-line|orbit-cash|orbit-investments/);
   assert.doesNotMatch(component, /FinancialConnection|connection-line|connection-current|money-pulse|<animateMotion/);
   assert.doesNotMatch(component, /mock|placeholder balance|sample financial/i);
+});
+
+test("financial semantics and critical position labels remain explicit", async () => {
+  const [orb, component, styles] = await Promise.all([readFile(orbPath, "utf8"), readFile(componentPath, "utf8"), readFile(stylesPath, "utf8")]);
+  assert.match(orb, /data-financial-semantic=\{semanticType\}/);
+  assert.match(component, /Latest recorded position/);
+  assert.match(component, /Period flow/);
+  assert.match(styles, /financial-orb--position>\.financial-orb__value \{ display:block; overflow:visible/);
+  assert.match(styles, /prefers-reduced-motion:reduce/);
 });
 
 test("Universe remains keyboard-operable, responsive, and motion-safe", async () => {

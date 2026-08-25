@@ -528,6 +528,9 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
 .financial-scene[data-scene-tone="lifestyle"] .financial-scene__environment { background:radial-gradient(ellipse at 50% 43%,rgba(var(--vx-color-lifestyle),.1),transparent 50%) }
 .financial-scene[data-scene-tone="cashflow"] .financial-scene__environment { background:radial-gradient(ellipse at 50% 43%,rgba(var(--vx-color-cashflow),.11),transparent 50%) }
 .financial-scene__center { position:absolute; z-index:6; left:50%; top:40%; transform:translate(-50%,-50%); }
+@media (min-width:1101px) {
+  .universe-shell:has(.financial-intelligence) .financial-scene { right:380px; }
+}
 .financial-scene>.financial-constellation { position:absolute; inset:0; width:auto; height:auto; display:block; overflow:visible; z-index:7; pointer-events:none; }
 .financial-constellation[data-constellation-role="children"] { z-index:9; }
 .financial-constellation__slot { position:absolute; left:calc(50% + var(--constellation-x)); top:calc(40% + var(--constellation-y)); display:grid; place-items:center; transform:translate(-50%,-50%); transition:left var(--vx-motion-travel) var(--vx-motion-ease),top var(--vx-motion-travel) var(--vx-motion-ease),opacity var(--vx-motion-settle) ease,filter var(--vx-motion-settle) ease; pointer-events:auto; }
@@ -547,6 +550,8 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
 .financial-orb>.financial-orb__name { width:auto; max-width:168px; display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:var(--vx-type-orb-child); line-height:1.2; }
 .financial-orb--primary>.financial-orb__name,.financial-orb--hero>.financial-orb__name { font-size:var(--vx-type-orb-center) }
 .financial-orb>.financial-orb__value { width:auto; max-width:172px; display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; color:rgb(var(--node-color)); font-size:var(--vx-type-value-child); line-height:1.25; }
+.financial-orb>.financial-orb__value { white-space:pre-line; }
+.financial-orb--position>.financial-orb__value { display:block; overflow:visible; white-space:pre-line; -webkit-line-clamp:unset; }
 .financial-orb--primary>.financial-orb__value,.financial-orb--hero>.financial-orb__value { font-size:var(--vx-type-value-center) }
 .financial-orb>.financial-orb__ball { border-color:rgba(231,248,255,.42)!important; background:radial-gradient(circle at 28% 17%,rgba(255,255,255,.98) 0 2%,rgba(255,255,255,.45) 3% 8%,transparent 15%),radial-gradient(ellipse at 67% 28%,rgba(220,247,255,.44),transparent 28%),radial-gradient(circle at 43% 48%,rgba(var(--node-color),.31),rgba(var(--node-color),.11) 43%,rgba(2,7,16,.35) 69%,rgba(1,4,11,.84))!important; box-shadow:inset -22px -26px 36px rgba(0,0,0,.62),inset 14px 13px 24px rgba(255,255,255,.2),inset 0 -7px 17px rgba(var(--node-color),.32),0 20px 38px rgba(0,0,0,.44),0 0 42px rgba(var(--node-color),.25)!important; backdrop-filter:blur(7px) saturate(1.35); }
 .financial-orb--selected { transform:translateZ(100px) scale(1.06); }

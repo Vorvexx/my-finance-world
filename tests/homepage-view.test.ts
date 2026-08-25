@@ -205,8 +205,8 @@ test("uses financial meaning before category for spending and income", () => {
   ]);
   assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
     { label: "Lifestyle", total: 150, includedInPrimaryTotal: true },
-    { label: "Cash / Banking · Transfer", total: 200, includedInPrimaryTotal: false },
-    { label: "Cash / Banking", total: 40, includedInPrimaryTotal: false },
+    { label: "Transfers", total: 200, includedInPrimaryTotal: false },
+    { label: "Cash withdrawal", total: 40, includedInPrimaryTotal: false },
     { label: "Other / Unknown", total: 10, includedInPrimaryTotal: false },
   ]);
   assert.deepEqual(view.lifestyle.topCategories, [{ category: "Dining", amount: 130 }]);
@@ -299,11 +299,14 @@ test("projects selectable recent facts and suppresses related payment double cou
   assert.deepEqual(view.cashflow.net, { status: "known", amount: 60 });
   assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
     { label: "Lifestyle", total: 40, includedInPrimaryTotal: true },
-    { label: "Cash / Banking · Card settlement", total: 200, includedInPrimaryTotal: false },
+    { label: "Credit-card settlement", total: 200, includedInPrimaryTotal: false },
   ]);
   assert.deepEqual(view.cash.accounts.find((account) => account.displayName === "TD Credit Card")?.activity.reconciliation, {
-    purchases: 0, refunds: 0, payments: 200,
+    purchases: 0, refunds: 0, payments: 200, fees: 0, netActivity: -200,
   });
+  assert.deepEqual(view.cash.accounts.find((account) => account.displayName === "TD Credit Card")?.activity.projectionGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
+    { label: "Payment from TD Chequing", total: 200, includedInPrimaryTotal: false },
+  ]);
   assert.deepEqual(view.recentAndUpcoming.recent[0], {
     viewKey: "recent-1", date: "2099-08-03", description: "Approved description 3", amount: 200,
     direction: "outflow", kind: "payment", accountName: "Cash Account", category: null,

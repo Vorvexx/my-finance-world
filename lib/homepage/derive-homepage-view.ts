@@ -69,7 +69,7 @@ const accountView = (
     ? { status: "known", asOf: account.updatedAt }
     : { status: "unknown", message: "Balance date is unavailable." },
   sourceLabel: "Canonical financial snapshot",
-  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], incomeHistory: [], uncertainHistory: [], categoryDistribution: [], expected: [], reconciliation: { purchases: 0, refunds: 0, payments: 0 } },
+  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], incomeHistory: [], uncertainHistory: [], categoryDistribution: [], expected: [], reconciliation: { purchases: 0, refunds: 0, payments: 0, fees: 0, netActivity: 0 }, projectionGroups: [] },
   ...(statement ? {
     statement: {
       statementDate: statement.statementDate,
@@ -129,7 +129,8 @@ export const deriveHomepageView = ({
   corrections = new Map(),
   deferredReviewTransactionIds = new Set<string>(),
 }: HomepageFinancialSources): HomepageViewModel => {
-  const selectedPeriod = resolveFinancialPeriod({ key: periodKey, anchorDate: periodAnchor, customStart, customEnd });
+  const allDates = transactions?.map((transaction) => transaction.transactionDate).sort() ?? [];
+  const selectedPeriod = resolveFinancialPeriod({ key: periodKey, anchorDate: periodAnchor, customStart, customEnd, evidenceStart: allDates[0], evidenceEnd: allDates.at(-1) });
   const startDate = selectedPeriod.startDate;
   const endDate = selectedPeriod.endDate;
   const positionAvailable = model.status === "loaded" && model.summary !== null;
@@ -142,7 +143,6 @@ export const deriveHomepageView = ({
   );
   const activityAvailable = transactions !== null;
   const periodHasActivity = periodTransactions.length > 0;
-  const allDates = transactions?.map((transaction) => transaction.transactionDate).sort() ?? [];
   const coversSelectedPeriod = Boolean(allDates[0] && allDates[0] <= startDate && allDates.at(-1)! >= endDate);
   const periodHasEvidence = periodHasActivity || coversSelectedPeriod;
   const spendingCents = visiblePeriodTransactions
@@ -267,9 +267,10 @@ export const deriveHomepageView = ({
         : transaction.attribution.world === "vehicle" ? "Vehicle"
         : transaction.attribution.world === "investments" ? "Investments"
         : affectsLifestyle(transaction) ? "Lifestyle"
-        : transaction.financialMeaning === "credit-card-payment" ? "Cash / Banking · Card settlement"
-        : transaction.financialMeaning === "transfer" ? "Cash / Banking · Transfer"
-        : transaction.financialMeaning === "fee" || transaction.financialMeaning === "cash-withdrawal" ? "Cash / Banking"
+        : transaction.financialMeaning === "credit-card-payment" ? "Credit-card settlement"
+        : transaction.financialMeaning === "transfer" ? "Transfers"
+        : transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest" ? "Fees / Interest"
+        : transaction.financialMeaning === "cash-withdrawal" ? "Cash withdrawal"
         : "Other / Unknown";
       const key = `${included ? "primary" : "movement"}:${label}`;
       const current = grouped.get(key) ?? { label, included, transactions: [] };
@@ -342,6 +343,35 @@ export const deriveHomepageView = ({
     }
     const activities = [...accountTransactions].sort((left, right) => right.transactionDate.localeCompare(left.transactionDate));
     const select = (predicate: (transaction: CanonicalTransaction) => boolean, prefix: string) => activities.filter(predicate).slice(0, 6).map((transaction, index) => activityView(transaction, `${prefix}-${index + 1}`));
+    const cardProjectionTransactions = isCreditCardAccount ? [
+      ...accountTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-purchase" || transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest" || transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal" || transaction.financialMeaning === "cash-withdrawal" || transaction.financialMeaning === "unknown"),
+      ...cashCardPayments,
+    ] : [];
+    const cardProjectionMap = new Map<string, { label: string; included: boolean; transactions: CanonicalTransaction[] }>();
+    for (const transaction of cardProjectionTransactions) {
+      const label = transaction.financialMeaning === "credit-card-payment" ? "Payment from TD Chequing"
+        : transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal" ? "Refunds / Credits"
+        : transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest" ? "Fees / Interest"
+        : transaction.financialMeaning === "cash-withdrawal" ? "Cash advances"
+        : transaction.financialMeaning === "unknown" ? "Other / Unknown"
+        : transaction.attribution.world === "home" ? "Home"
+        : transaction.attribution.world === "vehicle" ? "Vehicle"
+        : transaction.attribution.world === "investments" ? "Investments"
+        : "Lifestyle";
+      const included = transaction.financialMeaning !== "credit-card-payment";
+      const current = cardProjectionMap.get(label) ?? { label, included, transactions: [] };
+      current.transactions.push(transaction); cardProjectionMap.set(label, current);
+    }
+    const projectionGroups = [...cardProjectionMap.entries()].map(([key, group], index) => ({
+      key: `card:${key}`, label: group.label, includedInPrimaryTotal: group.included,
+      total: fromCents(group.transactions.reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+      transactions: [...group.transactions].sort((left, right) => right.amount - left.amount || right.transactionDate.localeCompare(left.transactionDate))
+        .map((transaction, transactionIndex) => activityView(transaction, `card-flow-${index + 1}-${transactionIndex + 1}`)),
+    })).sort((left, right) => Number(right.includedInPrimaryTotal) - Number(left.includedInPrimaryTotal) || right.total - left.total);
+    const purchaseCents = accountTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-purchase").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
+    const refundCents = accountTransactions.filter((transaction) => transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
+    const feeCents = accountTransactions.filter((transaction) => transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
+    const paymentCents = cashCardPayments.reduce((sum, transaction) => sum + cents(transaction.amount), 0);
     return {
       moneyIn: fromCents(accountTransactions.filter((transaction) => transaction.direction === "inflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
       moneyOut: fromCents(accountTransactions.filter((transaction) => transaction.direction === "outflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
@@ -357,10 +387,10 @@ export const deriveHomepageView = ({
       categoryDistribution: [...accountCategories.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5).map(([category, amount]) => ({ category, amount: fromCents(amount) })),
       expected: expectedUpcoming.filter((_, index) => recurringPatterns[index]?.accountId === accountId),
       reconciliation: {
-        purchases: fromCents(accountTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-purchase").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
-        refunds: fromCents(accountTransactions.filter((transaction) => transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
-        payments: fromCents(cashCardPayments.reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+        purchases: fromCents(purchaseCents), refunds: fromCents(refundCents), payments: fromCents(paymentCents), fees: fromCents(feeCents),
+        netActivity: fromCents(purchaseCents + feeCents - refundCents - paymentCents),
       },
+      projectionGroups,
     };
   };
   const visibleInflowCents = visiblePeriodTransactions.filter((transaction) => transaction.direction === "inflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0);

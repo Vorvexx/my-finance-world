@@ -23,9 +23,9 @@ export function TimeNavigator({ period }: { period: HomepageViewModel["period"] 
     setCustomOpen(false); router.replace(href(key, period.anchorDate));
   };
   return <aside className="time-navigator" aria-label="World time context">
-    <button type="button" className="time-navigator__step" aria-label="Previous period" disabled={period.key === "custom"} onClick={() => router.replace(href(period.key, period.previousAnchor))}>‹</button>
+    <button type="button" className="time-navigator__step" aria-label="Previous period" disabled={period.key === "custom" || period.key === "all"} onClick={() => router.replace(href(period.key, period.previousAnchor))}>‹</button>
     <div className="time-navigator__rail">{FINANCIAL_PERIODS.map((choice) => <button type="button" key={choice.key} aria-pressed={period.key === choice.key} onClick={() => select(choice.key)}>{choice.label}</button>)}</div>
-    <button type="button" className="time-navigator__step" aria-label="Next period" disabled={period.key === "custom"} onClick={() => router.replace(href(period.key, period.nextAnchor))}>›</button>
+    <button type="button" className="time-navigator__step" aria-label="Next period" disabled={period.key === "custom" || period.key === "all"} onClick={() => router.replace(href(period.key, period.nextAnchor))}>›</button>
     <span className="time-navigator__range"><b>{period.label}</b>{period.displayLabel}</span>
     {customOpen && <form className="time-navigator__custom" onSubmit={(event) => { event.preventDefault(); if (start && end && end >= start) router.replace(href("custom", undefined, start, end)); }}>
       <label>From<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>

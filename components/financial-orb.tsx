@@ -12,10 +12,11 @@ export type FinancialOrbProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "c
   accent: FinancialOrbAccent;
   size?: FinancialOrbSize;
   state?: FinancialOrbState;
+  semanticType?: "period-flow" | "snapshot" | "statement-fact" | "expectation";
 };
 
 export function FinancialOrb({
-  name, icon, value, accent, size = "secondary", state = "idle", className = "", type = "button", ...buttonProps
+  name, icon, value, accent, size = "secondary", state = "idle", semanticType, className = "", type = "button", ...buttonProps
 }: FinancialOrbProps) {
   return <button
     {...buttonProps}
@@ -23,6 +24,7 @@ export function FinancialOrb({
     className={`financial-orb financial-orb--${size} financial-orb--${state} tone-${accent} ${className}`.trim()}
     data-orb-size={size}
     data-orb-state={state}
+    data-financial-semantic={semanticType}
   >
     <span className="financial-orb__name">{name}</span>
     <span className="financial-orb__ball" aria-hidden="true"><span className="financial-orb__icon">{icon}</span></span>

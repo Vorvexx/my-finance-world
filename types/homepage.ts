@@ -77,7 +77,8 @@ export type HomepageAccount = {
     uncertainHistory: readonly HomepageActivity[];
     categoryDistribution: readonly HomepageCategoryTotal[];
     expected: readonly Extract<HomepageUpcomingObligation, { certainty: "expected" }>[];
-    reconciliation: { purchases: number; refunds: number; payments: number };
+    reconciliation: { purchases: number; refunds: number; payments: number; fees: number; netActivity: number };
+    projectionGroups: readonly HomepageFlowGroup[];
   };
 };
 
