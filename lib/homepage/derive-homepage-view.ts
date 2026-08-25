@@ -69,7 +69,7 @@ const accountView = (
     ? { status: "known", asOf: account.updatedAt }
     : { status: "unknown", message: "Balance date is unavailable." },
   sourceLabel: "Canonical financial snapshot",
-  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], incomeHistory: [], uncertainHistory: [], categoryDistribution: [], expected: [] },
+  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], incomeHistory: [], uncertainHistory: [], categoryDistribution: [], expected: [], reconciliation: { purchases: 0, refunds: 0, payments: 0 } },
   ...(statement ? {
     statement: {
       statementDate: statement.statementDate,
@@ -253,6 +253,35 @@ export const deriveHomepageView = ({
   const cashflowInflows = visiblePeriodTransactions.filter((transaction) => transaction.financialMeaning === "income"
     || transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal");
   const cashflowOutflows = visiblePeriodTransactions.filter((transaction) => SPENDING.has(transaction.financialMeaning));
+  const flowGroup = (items: readonly CanonicalTransaction[], direction: "inflow" | "outflow") => {
+    const grouped = new Map<string, { label: string; included: boolean; transactions: CanonicalTransaction[] }>();
+    for (const transaction of items) {
+      const included = direction === "inflow" ? cashflowInflows.includes(transaction) : cashflowOutflows.includes(transaction);
+      const label = direction === "inflow"
+        ? transaction.financialMeaning === "income" ? transaction.attribution.category ?? "Income"
+        : transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal" ? transaction.attribution.category ?? "Refund / Rebate"
+        : transaction.financialMeaning === "transfer" ? "Transfer In"
+        : transaction.financialMeaning === "credit-card-payment" ? "Card settlement"
+        : "Other / Unknown"
+        : transaction.attribution.world === "home" ? "Home"
+        : transaction.attribution.world === "vehicle" ? "Vehicle"
+        : transaction.attribution.world === "investments" ? "Investments"
+        : affectsLifestyle(transaction) ? "Lifestyle"
+        : transaction.financialMeaning === "credit-card-payment" ? "Cash / Banking · Card settlement"
+        : transaction.financialMeaning === "transfer" ? "Cash / Banking · Transfer"
+        : transaction.financialMeaning === "fee" || transaction.financialMeaning === "cash-withdrawal" ? "Cash / Banking"
+        : "Other / Unknown";
+      const key = `${included ? "primary" : "movement"}:${label}`;
+      const current = grouped.get(key) ?? { label, included, transactions: [] };
+      current.transactions.push(transaction); grouped.set(key, current);
+    }
+    return [...grouped.entries()].map(([key, group], index) => ({
+      key, label: group.label, includedInPrimaryTotal: group.included,
+      total: fromCents(group.transactions.reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+      transactions: [...group.transactions].sort((left, right) => right.amount - left.amount || right.transactionDate.localeCompare(left.transactionDate))
+        .map((transaction, transactionIndex) => activityView(transaction, `flow-${direction}-${index + 1}-${transactionIndex + 1}`)),
+    })).sort((left, right) => Number(right.includedInPrimaryTotal) - Number(left.includedInPrimaryTotal) || right.total - left.total || left.label.localeCompare(right.label));
+  };
   const cashflowInCents = cashflowInflows.reduce((sum, transaction) => sum + cents(transaction.amount), 0);
   const cashflowOutCents = cashflowOutflows.reduce((sum, transaction) => sum + cents(transaction.amount), 0);
   const monthlyMovement = new Map<string, { moneyIn: number; moneyOut: number; lifestyleSpending: number }>();
@@ -298,9 +327,13 @@ export const deriveHomepageView = ({
     direction: pattern.direction,
     evidenceCount: pattern.evidenceCount,
   }));
-  const upcoming = [...knownUpcoming, ...expectedUpcoming].sort((left, right) => left.date.localeCompare(right.date));
+  const upcoming = [...knownUpcoming, ...expectedUpcoming].sort((left, right) => right.amount - left.amount || left.date.localeCompare(right.date));
   const accountActivity = (accountId: string) => {
     const accountTransactions = visiblePeriodTransactions.filter((transaction) => transaction.accountId === accountId);
+    const isCreditCardAccount = liabilityAccounts.some((account) => account.id === accountId && accountType(account.name, "liabilities") === "Credit card");
+    const cashCardPayments = isCreditCardAccount
+      ? visiblePeriodTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-payment" && transaction.direction === "outflow")
+      : accountTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-payment");
     const accountHistory = visibleHistoryTransactions.filter((transaction) => transaction.accountId === accountId)
       .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate));
     const accountCategories = new Map<string, number>();
@@ -315,13 +348,19 @@ export const deriveHomepageView = ({
       recent: select(() => true, "account-recent"),
       purchases: select((transaction) => transaction.financialMeaning === "credit-card-purchase", "account-purchase"),
       refunds: select((transaction) => transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal", "account-refund"),
-      payments: select((transaction) => transaction.financialMeaning === "credit-card-payment", "account-payment"),
+      payments: [...cashCardPayments].sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 6)
+        .map((transaction, index) => activityView(transaction, `account-payment-${index + 1}`)),
       incomeHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "income").slice(0, 12)
         .map((transaction, index) => activityView(transaction, `account-income-history-${index + 1}`)),
       uncertainHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "unknown").slice(0, 12)
         .map((transaction, index) => activityView(transaction, `account-uncertain-history-${index + 1}`)),
       categoryDistribution: [...accountCategories.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5).map(([category, amount]) => ({ category, amount: fromCents(amount) })),
       expected: expectedUpcoming.filter((_, index) => recurringPatterns[index]?.accountId === accountId),
+      reconciliation: {
+        purchases: fromCents(accountTransactions.filter((transaction) => transaction.financialMeaning === "credit-card-purchase").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+        refunds: fromCents(accountTransactions.filter((transaction) => transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal").reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+        payments: fromCents(cashCardPayments.reduce((sum, transaction) => sum + cents(transaction.amount), 0)),
+      },
     };
   };
   const visibleInflowCents = visiblePeriodTransactions.filter((transaction) => transaction.direction === "inflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
@@ -464,6 +503,8 @@ export const deriveHomepageView = ({
       net: periodHasEvidence ? money(fromCents(cashflowInCents - cashflowOutCents)) : unknown("No recorded activity establishes this selected period."),
       topInflows: largest(cashflowInflows, "cashflow-in", "inflow"),
       topOutflows: largest(cashflowOutflows, "cashflow-out", "outflow"),
+      inflowGroups: flowGroup(visiblePeriodTransactions.filter((transaction) => transaction.direction === "inflow"), "inflow"),
+      outflowGroups: flowGroup(visiblePeriodTransactions.filter((transaction) => transaction.direction === "outflow"), "outflow"),
       reviewNeededCount: visibleReviewCount,
       monthlyHistory,
     },

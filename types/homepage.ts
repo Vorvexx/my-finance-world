@@ -18,6 +18,7 @@ export type HomepageActivity = {
 };
 
 export type HomepageCategoryTotal = { category: string; amount: number };
+export type HomepageFlowGroup = { key: string; label: string; total: number; includedInPrimaryTotal: boolean; transactions: readonly HomepageActivity[] };
 
 export type HomepageLifestyleTransaction = {
   viewKey: string;
@@ -76,6 +77,7 @@ export type HomepageAccount = {
     uncertainHistory: readonly HomepageActivity[];
     categoryDistribution: readonly HomepageCategoryTotal[];
     expected: readonly Extract<HomepageUpcomingObligation, { certainty: "expected" }>[];
+    reconciliation: { purchases: number; refunds: number; payments: number };
   };
 };
 
@@ -115,7 +117,7 @@ export type HomepageViewModel = {
   status: "ready" | "partial" | "unavailable";
   currency: "CAD";
   snapshotDate: string | null;
-  period: { key: FinancialPeriodKey; label: string; startDate: string; endDate: string; anchorDate: string; previousAnchor: string; nextAnchor: string };
+  period: { key: FinancialPeriodKey; label: string; displayLabel: string; startDate: string; endDate: string; anchorDate: string; previousAnchor: string; nextAnchor: string };
   position: {
     netWorth: HomepageMoney;
     assets: HomepageMoney;
@@ -149,6 +151,8 @@ export type HomepageViewModel = {
     net: HomepageMoney;
     topInflows: readonly HomepageActivity[];
     topOutflows: readonly HomepageActivity[];
+    inflowGroups: readonly HomepageFlowGroup[];
+    outflowGroups: readonly HomepageFlowGroup[];
     reviewNeededCount: number;
     monthlyHistory: readonly { month: string; moneyIn: number; moneyOut: number; lifestyleSpending: number }[];
   };

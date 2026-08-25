@@ -198,6 +198,17 @@ test("uses financial meaning before category for spending and income", () => {
   assert.deepEqual(view.cashflow.net, { status: "known", amount: 370 });
   assert.deepEqual(view.cashflow.topInflows.map((item) => item.amount), [500, 20]);
   assert.deepEqual(view.cashflow.topOutflows.map((item) => item.amount), [100, 50]);
+  assert.deepEqual(view.cashflow.inflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
+    { label: "Income", total: 500, includedInPrimaryTotal: true },
+    { label: "Dining", total: 20, includedInPrimaryTotal: true },
+    { label: "Card settlement", total: 200, includedInPrimaryTotal: false },
+  ]);
+  assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
+    { label: "Lifestyle", total: 150, includedInPrimaryTotal: true },
+    { label: "Cash / Banking · Transfer", total: 200, includedInPrimaryTotal: false },
+    { label: "Cash / Banking", total: 40, includedInPrimaryTotal: false },
+    { label: "Other / Unknown", total: 10, includedInPrimaryTotal: false },
+  ]);
   assert.deepEqual(view.lifestyle.topCategories, [{ category: "Dining", amount: 130 }]);
   assert.equal(view.lifestyle.unclassifiedCount, 1);
   assert.deepEqual(view.recentAndUpcoming.recent.map((item) => item.kind), [
@@ -286,6 +297,13 @@ test("projects selectable recent facts and suppresses related payment double cou
   assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 100 });
   assert.deepEqual(view.cashflow.moneyOut, { status: "known", amount: 40 });
   assert.deepEqual(view.cashflow.net, { status: "known", amount: 60 });
+  assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
+    { label: "Lifestyle", total: 40, includedInPrimaryTotal: true },
+    { label: "Cash / Banking · Card settlement", total: 200, includedInPrimaryTotal: false },
+  ]);
+  assert.deepEqual(view.cash.accounts.find((account) => account.displayName === "TD Credit Card")?.activity.reconciliation, {
+    purchases: 0, refunds: 0, payments: 200,
+  });
   assert.deepEqual(view.recentAndUpcoming.recent[0], {
     viewKey: "recent-1", date: "2099-08-03", description: "Approved description 3", amount: 200,
     direction: "outflow", kind: "payment", accountName: "Cash Account", category: null,

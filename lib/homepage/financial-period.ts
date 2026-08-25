@@ -8,6 +8,7 @@ const iso = (date: Date) => date.toISOString().slice(0, 10);
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
 const addDays = (value: string, days: number) => { const result = date(value); result.setUTCDate(result.getUTCDate() + days); return iso(result); };
 const valid = (value: unknown): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+const human = (value: string, options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", ...options }).format(date(value));
 export const parseFinancialPeriod = (value: unknown): FinancialPeriodKey => FINANCIAL_PERIODS.some((period) => period.key === value) ? value as FinancialPeriodKey : "month";
 export const resolveFinancialPeriod = ({ key, anchorDate, customStart, customEnd }: FinancialPeriodSelection) => {
   const anchor = date(anchorDate); let startDate = anchorDate; let endDate = anchorDate; let previousAnchor = anchorDate; let nextAnchor = anchorDate;
@@ -17,5 +18,11 @@ export const resolveFinancialPeriod = ({ key, anchorDate, customStart, customEnd
   else if (key === "year") { startDate = `${anchor.getUTCFullYear()}-01-01`; endDate = `${anchor.getUTCFullYear()}-12-31`; previousAnchor = `${anchor.getUTCFullYear() - 1}-01-01`; nextAnchor = `${anchor.getUTCFullYear() + 1}-01-01`; }
   else if (key === "day") { previousAnchor = addDays(anchorDate, -1); nextAnchor = addDays(anchorDate, 1); }
   else { startDate = valid(customStart) ? customStart : anchorDate; endDate = valid(customEnd) && customEnd >= startDate ? customEnd : startDate; }
-  return { key, label: FINANCIAL_PERIODS.find((period) => period.key === key)!.label, startDate, endDate, anchorDate, previousAnchor, nextAnchor };
+  const label = FINANCIAL_PERIODS.find((period) => period.key === key)!.label;
+  const displayLabel = key === "day" ? human(startDate, { month: "long", day: "numeric", year: "numeric" })
+    : key === "month" ? human(startDate, { month: "long", year: "numeric" })
+    : key === "year" ? startDate.slice(0, 4)
+    : key === "quarter" ? `Q${Math.floor(date(startDate).getUTCMonth() / 3) + 1} · ${human(startDate, { month: "short" })} – ${human(endDate, { month: "short", year: "numeric" })}`
+    : `${human(startDate, { month: "short", day: "numeric" })} – ${human(endDate, { month: "short", day: "numeric", year: "numeric" })}`;
+  return { key, label, displayLabel, startDate, endDate, anchorDate, previousAnchor, nextAnchor };
 };

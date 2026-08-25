@@ -10,7 +10,7 @@ test("defines one reusable calendar-period vocabulary", () => {
 });
 
 test("resolves Monday weeks, calendar months, quarters, years, navigation and inclusive custom ranges", () => {
-  assert.deepEqual(resolveFinancialPeriod({ key: "week", anchorDate: "2026-08-24" }), { key: "week", label: "Week", startDate: "2026-08-24", endDate: "2026-08-30", anchorDate: "2026-08-24", previousAnchor: "2026-08-17", nextAnchor: "2026-08-31" });
+  assert.deepEqual(resolveFinancialPeriod({ key: "week", anchorDate: "2026-08-24" }), { key: "week", label: "Week", displayLabel: "Aug 24 – Aug 30, 2026", startDate: "2026-08-24", endDate: "2026-08-30", anchorDate: "2026-08-24", previousAnchor: "2026-08-17", nextAnchor: "2026-08-31" });
   assert.equal(resolveFinancialPeriod({ key: "month", anchorDate: "2024-02-17" }).endDate, "2024-02-29");
   assert.deepEqual(resolveFinancialPeriod({ key: "quarter", anchorDate: "2026-08-24" }).startDate, "2026-07-01");
   assert.deepEqual(resolveFinancialPeriod({ key: "quarter", anchorDate: "2026-08-24" }).endDate, "2026-09-30");

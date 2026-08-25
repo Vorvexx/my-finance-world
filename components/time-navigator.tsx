@@ -26,11 +26,12 @@ export function TimeNavigator({ period }: { period: HomepageViewModel["period"] 
     <button type="button" className="time-navigator__step" aria-label="Previous period" disabled={period.key === "custom"} onClick={() => router.replace(href(period.key, period.previousAnchor))}>‹</button>
     <div className="time-navigator__rail">{FINANCIAL_PERIODS.map((choice) => <button type="button" key={choice.key} aria-pressed={period.key === choice.key} onClick={() => select(choice.key)}>{choice.label}</button>)}</div>
     <button type="button" className="time-navigator__step" aria-label="Next period" disabled={period.key === "custom"} onClick={() => router.replace(href(period.key, period.nextAnchor))}>›</button>
-    <span className="time-navigator__range"><b>{period.label}</b>{period.startDate} — {period.endDate}</span>
+    <span className="time-navigator__range"><b>{period.label}</b>{period.displayLabel}</span>
     {customOpen && <form className="time-navigator__custom" onSubmit={(event) => { event.preventDefault(); if (start && end && end >= start) router.replace(href("custom", undefined, start, end)); }}>
       <label>From<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>
       <label>To<input type="date" value={end} min={start} onChange={(event) => setEnd(event.target.value)} /></label>
       <button type="submit">Apply</button>
+      <button type="button" onClick={() => setCustomOpen(false)}>Cancel</button>
     </form>}
   </aside>;
 }

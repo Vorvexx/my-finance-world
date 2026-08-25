@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
-export type VorvexIconKey = "net-worth" | "cash" | "cashflow" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "dining" | "entertainment" | "shopping" | "convenience" | "alcohol" | "cannabis" | "telecom" | "subscriptions" | "utilities" | "review" | "income" | "outflow" | "recent" | "upcoming";
+export type VorvexIconKey = "net-worth" | "cash" | "chequing" | "cashflow" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "dining" | "entertainment" | "shopping" | "convenience" | "alcohol" | "cannabis" | "telecom" | "subscriptions" | "utilities" | "review" | "income" | "outflow" | "recent" | "upcoming";
 
 const common = { viewBox: "0 0 48 48", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
 export function VorvexIcon({ icon }: { icon: VorvexIconKey }) {
   if (icon === "net-worth") return <svg {...common}><circle cx="24" cy="24" r="16"/><path d="M15 29c4-10 9-15 18-14M15 22c6 0 12 3 18 11"/><circle cx="24" cy="24" r="3"/></svg>;
   if (icon === "cash") return <svg {...common}><path d="M10 16h27a4 4 0 0 1 4 4v17H10a4 4 0 0 1-4-4V15a5 5 0 0 1 5-5h23"/><path d="M31 24h10v8H31a4 4 0 0 1 0-8Z"/><circle cx="33" cy="28" r="1"/></svg>;
+  if (icon === "chequing") return <svg {...common}><path d="M6 18 24 7l18 11M9 19h30M11 37h26M8 42h32"/><path d="M14 20v15M21 20v15M28 20v15M35 20v15"/></svg>;
   if (icon === "cashflow") return <svg {...common}><path d="M7 35 17 23l8 7 15-19"/><path d="M32 11h8v8"/><path d="M8 13v22h33"/></svg>;
   if (icon === "investments") return <svg {...common}><path d="M8 38h33"/><path d="M12 33V24h6v9M22 33V18h6v15M32 33V11h6v22"/><path d="m10 19 10-7 8 4 12-9"/></svg>;
   if (icon === "liabilities") return <svg {...common}><rect x="6" y="11" width="36" height="26" rx="4"/><path d="M6 18h36M12 30h9"/><circle cx="35" cy="29" r="2"/></svg>;
@@ -26,6 +27,7 @@ export function VorvexIcon({ icon }: { icon: VorvexIconKey }) {
   if (icon === "income") return <svg {...common}><path d="M24 7v30M13 18l11-11 11 11M9 41h30"/></svg>;
   if (icon === "outflow") return <svg {...common}><path d="M24 41V11M13 30l11 11 11-11M9 7h30"/></svg>;
   if (icon === "recent") return <svg {...common}><circle cx="24" cy="24" r="17"/><path d="M24 14v11l8 5M8 11v8h8"/></svg>;
+  if (icon === "upcoming") return <svg {...common}><rect x="7" y="10" width="34" height="31" rx="4"/><path d="M15 6v8M33 6v8M7 19h34M16 27h7M27 27h6M16 34h7"/></svg>;
   return <svg {...common}><path d="M24 41V11M14 21l10-10 10 10"/><path d="M9 41h30"/></svg>;
 }
 
