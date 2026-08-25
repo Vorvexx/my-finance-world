@@ -184,7 +184,21 @@ test("merchant intelligence classifies narrow identities but leaves ambiguous re
     make("STARBUCKS 1234", 1), make("ROGERS WIRELESS", 2), make("NETFLIX.COM", 3), make("WALMART SUPERCENTRE", 4),
   ]);
   assert.equal(coffee.attribution.category, "Dining");
+  assert.equal(coffee.financialMeaning, "expense");
   assert.equal(telecom.attribution.category, "Telecom");
+  assert.equal(telecom.financialMeaning, "expense");
   assert.equal(subscription.attribution.category, "Subscriptions");
+  assert.equal(subscription.financialMeaning, "expense");
   assert.equal(ambiguous.attribution.category, null);
+  assert.equal(ambiguous.financialMeaning, "unknown");
+});
+
+test("narrow merchant intelligence preserves direction when completing financial meaning", () => {
+  const credit = ingestTransactions([raw({
+    description: "NETFLIX.COM", financialMeaning: "unknown", direction: "inflow", sourceRecordId: "merchant-credit",
+    fingerprint: { version: "test-v1", value: "merchant-credit" },
+  })]).transactions[0];
+  const [understood] = applyDeterministicAttribution([credit]);
+  assert.equal(understood.financialMeaning, "refund");
+  assert.equal(understood.attribution.category, "Subscriptions");
 });

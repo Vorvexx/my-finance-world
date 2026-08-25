@@ -105,6 +105,15 @@ const ambiguousGroupKeys = (transactions: readonly CanonicalTransaction[]) => {
   }).map(([key]) => key));
 };
 
+const stillNeedsFounderClassification = (transaction: CanonicalTransaction) => {
+  const highConfidence = transaction.attribution.method !== "unclassified" && (transaction.attribution.confidence ?? 0) >= 0.9;
+  const incomplete = transaction.financialMeaning === "unknown"
+    || transaction.financialMeaning === "transfer"
+    || (["expense", "refund", "reversal", "fee", "interest", "credit-card-purchase"].includes(transaction.financialMeaning)
+      && transaction.attribution.category === null);
+  return !highConfidence && incomplete;
+};
+
 const suggestionsFor = (item: ReviewItem, transactions: readonly CanonicalTransaction[], aliases: ReturnType<LocalReviewLearningStore["listLanguageAliases"]>): readonly BrowserReviewSuggestion[] => {
   const direction = transactions[0]?.direction;
   const subject = `${item.normalizedCounterparty} ${item.description}`.toLocaleLowerCase("en-CA");
@@ -136,6 +145,18 @@ export class FounderReviewService {
   #key: Uint8Array;
   constructor(store: LocalReviewLearningStore, key: Uint8Array) { this.#store = store; this.#key = key; }
 
+  understandingState(now = new Date(), transactions: readonly CanonicalTransaction[] = []) {
+    this.#store.restoreDeferredReviews(now.toISOString());
+    const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
+    return {
+      genuinelyUnknownTransactionIds: new Set(this.#store.listReviewItems("pending").flatMap((item) => {
+        const transaction = transactionById.get(item.transactionId);
+        return transaction && stillNeedsFounderClassification(transaction) ? [item.transactionId] : [];
+      })),
+      intentionallyDeferredTransactionIds: new Set(this.#store.listReviewItems("ignored").map((item) => item.transactionId)),
+    };
+  }
+
   listPending(now = new Date(), transactions: readonly CanonicalTransaction[] = [], accountNames: ReadonlyMap<string, string> = new Map()): ReviewQueueView {
     this.#store.restoreDeferredReviews(now.toISOString());
     const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
@@ -144,12 +165,7 @@ export class FounderReviewService {
     for (const item of this.#store.listReviewItems("pending")) {
       const transaction = transactionById.get(item.transactionId);
       if (transaction) {
-        const highConfidence = transaction.attribution.method !== "unclassified" && (transaction.attribution.confidence ?? 0) >= 0.9;
-        const stillNeedsClassification = transaction.financialMeaning === "unknown"
-          || transaction.financialMeaning === "transfer"
-          || (["expense", "refund", "reversal", "fee", "interest", "credit-card-purchase"].includes(transaction.financialMeaning)
-            && transaction.attribution.category === null);
-        if (highConfidence || !stillNeedsClassification) continue;
+        if (!stillNeedsFounderClassification(transaction)) continue;
       }
       const baseKey = [item.accountId, item.normalizedCounterparty, transaction?.direction ?? "unknown", item.currentFinancialMeaning].join("\u0000");
       const key = transaction && ambiguous.has(ambiguityKey(transaction)) ? `${baseKey}\u0000${item.transactionId}` : baseKey;

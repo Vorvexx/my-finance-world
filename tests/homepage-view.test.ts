@@ -264,6 +264,18 @@ test("Review Later is disclosed separately and Home and Vehicle categories remai
   assert.deepEqual(view.vehicle.categories.map(({ label, total }) => ({ label, total })), [{ label: "Fuel", total: 60 }]);
 });
 
+test("genuinely Unknown follows the canonical review projection rather than raw transaction meaning", () => {
+  const unresolved = transaction({ index: 1, meaning: "unknown", amount: 25 });
+  const deterministicallyUnderstood = { ...transaction({ index: 2, meaning: "unknown", amount: 40, category: "Dining" }), attribution: { ...transaction({ index: 2, meaning: "unknown", amount: 40, category: "Dining" }).attribution, method: "deterministic-rule" as const, confidence: 0.96 } };
+  const view = deriveHomepageView({
+    model, transactions: [unresolved, deterministicallyUnderstood], statementFacts: [], asOfDate: "2099-08-08",
+    genuinelyUnknownTransactionIds: new Set([unresolved.id]),
+  });
+  assert.equal(view.attention.genuinelyUnknownCount, 1);
+  assert.equal(view.recentAndUpcoming.summary.reviewNeededCount, 1);
+  assert.equal(view.lifestyle.actionableReviewCount, 1);
+});
+
 test("bank fees remain Cashflow activity but never inflate Lifestyle", () => {
   const transactions = [
     transaction({ index: 1, meaning: "fee", amount: 15, category: "Banking Fees" }),

@@ -88,12 +88,18 @@ export const applyDeterministicAttribution = (
     : transaction.direction === "outflow" && /\b(?:ROGERS|BELL CANADA|ALECTRA|HYDRO|UTILITY)\b/i.test(subject) ? "expense"
     : transaction.direction === "outflow" && /\b(?:ATM|CASH)\s+(?:W\/D|WITHDRAW)\b/i.test(subject) ? "cash-withdrawal"
     : transaction.financialMeaning;
-  if (transaction.attribution.method !== "unclassified") return financialMeaning === transaction.financialMeaning ? transaction : { ...transaction, financialMeaning };
+  const existingUnderstoodMeaning = financialMeaning === "unknown" && transaction.attribution.method === "deterministic-rule"
+    ? transaction.direction === "outflow" ? "expense" : "refund"
+    : financialMeaning;
+  if (transaction.attribution.method !== "unclassified") return existingUnderstoodMeaning === transaction.financialMeaning ? transaction : { ...transaction, financialMeaning: existingUnderstoodMeaning };
   const attribution = attributeTransaction({
     transactionId: transaction.id,
     description: transaction.rawDescription,
     normalizedCounterparty: transaction.normalizedCounterparty,
   });
-  return attribution.method === "unclassified" && financialMeaning === transaction.financialMeaning
-    ? transaction : { ...transaction, financialMeaning, attribution };
+  const understoodMeaning = existingUnderstoodMeaning === "unknown" && attribution.method === "deterministic-rule"
+    ? transaction.direction === "outflow" ? "expense" : "refund"
+    : existingUnderstoodMeaning;
+  return attribution.method === "unclassified" && understoodMeaning === transaction.financialMeaning
+    ? transaction : { ...transaction, financialMeaning: understoodMeaning, attribution };
 });

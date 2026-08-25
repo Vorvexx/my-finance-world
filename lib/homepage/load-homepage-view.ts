@@ -23,13 +23,12 @@ export const loadHomepageView = async ({ asOfDate, periodKey, periodAnchor, cust
   const relationshipReadModel = reviewedTransactions ? withRelationshipRuntime(({ store }) =>
     applyRelationshipSemantics(reviewedTransactions, store.listRelationships()))
     ?? { transactions: reviewedTransactions, suppressedActivityTransactionIds: new Set<string>() } : null;
-  const corrections = relationshipReadModel
-    ? withReviewRuntime(({ service }) => service.correctionsForTransactions(relationshipReadModel.transactions)) ?? new Map()
-    : new Map();
-  const deferredReviewTransactionIds = withReviewRuntime(({ store }) => new Set(store.listReviewItems("ignored").flatMap((item) => {
-    const decision = store.reviewDecision(item.id);
-    return decision?.kind === "ignore" && decision.deferred ? [item.transactionId] : [];
-  }))) ?? new Set<string>();
+  const reviewProjection = relationshipReadModel
+    ? withReviewRuntime(({ service }) => ({
+        corrections: service.correctionsForTransactions(relationshipReadModel.transactions),
+        understanding: service.understandingState(new Date(), relationshipReadModel.transactions),
+      }))
+    : null;
   return deriveHomepageView({
     model,
     transactions: relationshipReadModel?.transactions ?? null,
@@ -42,7 +41,8 @@ export const loadHomepageView = async ({ asOfDate, periodKey, periodAnchor, cust
     customStart,
     customEnd,
     suppressedActivityTransactionIds: relationshipReadModel?.suppressedActivityTransactionIds,
-    corrections,
-    deferredReviewTransactionIds,
+    corrections: reviewProjection?.corrections ?? new Map(),
+    deferredReviewTransactionIds: reviewProjection?.understanding.intentionallyDeferredTransactionIds ?? new Set(),
+    genuinelyUnknownTransactionIds: reviewProjection?.understanding.genuinelyUnknownTransactionIds,
   });
 };

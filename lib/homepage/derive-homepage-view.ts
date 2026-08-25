@@ -21,6 +21,7 @@ export type HomepageFinancialSources = {
   customEnd?: string;
   corrections?: ReadonlyMap<string, { actionToken: string; suggestions: import("../../types/review-interface.ts").BrowserReviewSuggestion[] }>;
   deferredReviewTransactionIds?: ReadonlySet<string>;
+  genuinelyUnknownTransactionIds?: ReadonlySet<string>;
 };
 
 const SPENDING = new Set<FinancialMeaning>(["expense", "fee", "interest", "credit-card-purchase"]);
@@ -128,6 +129,7 @@ export const deriveHomepageView = ({
   customEnd,
   corrections = new Map(),
   deferredReviewTransactionIds = new Set<string>(),
+  genuinelyUnknownTransactionIds,
 }: HomepageFinancialSources): HomepageViewModel => {
   const allDates = transactions?.map((transaction) => transaction.transactionDate).sort() ?? [];
   const selectedPeriod = resolveFinancialPeriod({ key: periodKey, anchorDate: periodAnchor, customStart, customEnd, evidenceStart: allDates[0], evidenceEnd: allDates.at(-1) });
@@ -145,6 +147,9 @@ export const deriveHomepageView = ({
   const periodHasActivity = periodTransactions.length > 0;
   const coversSelectedPeriod = Boolean(allDates[0] && allDates[0] <= startDate && allDates.at(-1)! >= endDate);
   const periodHasEvidence = periodHasActivity || coversSelectedPeriod;
+  const genuinelyUnknown = (transaction: CanonicalTransaction) => genuinelyUnknownTransactionIds
+    ? genuinelyUnknownTransactionIds.has(transaction.id)
+    : transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id);
   const spendingCents = visiblePeriodTransactions
     .filter((transaction) => SPENDING.has(transaction.financialMeaning) && affectsLifestyle(transaction))
     .reduce((sum, transaction) => sum + cents(transaction.amount), 0);
@@ -202,7 +207,7 @@ export const deriveHomepageView = ({
           amount: transaction.amount,
           spendingImpact: SPENDING.has(transaction.financialMeaning) ? transaction.amount : -transaction.amount,
           category: transaction.attribution.category,
-          needsReview: transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id),
+          needsReview: genuinelyUnknown(transaction),
           correction: corrections.get(transaction.id) ?? null,
         })),
     }));
@@ -233,16 +238,16 @@ export const deriveHomepageView = ({
   ).length;
   const reviewedLaterCount = visiblePeriodTransactions.filter((transaction) => deferredReviewTransactionIds.has(transaction.id)
     && (SPENDING.has(transaction.financialMeaning) || transaction.financialMeaning === "unknown") && transaction.attribution.category === null).length;
-  const actionableReviewCount = visiblePeriodTransactions.filter((transaction) => transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id)).length;
+  const actionableReviewCount = visiblePeriodTransactions.filter(genuinelyUnknown).length;
   const accountNames = new Map(model.money.accounts.map((account) => [account.id, account.name]));
   const activityView = (transaction: CanonicalTransaction, viewKey: string, direction = transaction.direction): HomepageActivity => ({
     viewKey, date: transaction.transactionDate, description: transaction.rawDescription, amount: transaction.amount,
     direction, kind: activityKind(transaction.financialMeaning),
     accountName: accountNames.get(transaction.accountId) ?? "Unknown account",
     category: transaction.attribution.category, financialMeaning: transaction.financialMeaning,
-    needsReview: transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id),
+    needsReview: genuinelyUnknown(transaction),
     understandingState: deferredReviewTransactionIds.has(transaction.id) ? "intentionally-deferred"
-      : transaction.financialMeaning === "unknown" ? "genuinely-unknown"
+      : genuinelyUnknown(transaction) ? "genuinely-unknown"
       : SPENDING.has(transaction.financialMeaning) && transaction.attribution.category === null ? "category-ambiguous" : "understood",
     correction: corrections.get(transaction.id) ?? null,
   });
@@ -382,7 +387,7 @@ export const deriveHomepageView = ({
         .map((transaction, index) => activityView(transaction, `account-payment-${index + 1}`)),
       incomeHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "income").slice(0, 12)
         .map((transaction, index) => activityView(transaction, `account-income-history-${index + 1}`)),
-      uncertainHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "unknown").slice(0, 12)
+      uncertainHistory: accountHistory.filter(genuinelyUnknown).slice(0, 12)
         .map((transaction, index) => activityView(transaction, `account-uncertain-history-${index + 1}`)),
       categoryDistribution: [...accountCategories.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5).map(([category, amount]) => ({ category, amount: fromCents(amount) })),
       expected: expectedUpcoming.filter((_, index) => recurringPatterns[index]?.accountId === accountId),
@@ -395,7 +400,7 @@ export const deriveHomepageView = ({
   };
   const visibleInflowCents = visiblePeriodTransactions.filter((transaction) => transaction.direction === "inflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
   const visibleOutflowCents = visiblePeriodTransactions.filter((transaction) => transaction.direction === "outflow").reduce((sum, transaction) => sum + cents(transaction.amount), 0);
-  const visibleReviewCount = visiblePeriodTransactions.filter((transaction) => transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id)).length;
+  const visibleReviewCount = visiblePeriodTransactions.filter(genuinelyUnknown).length;
   const importedAccountCount = new Set(transactions?.map((transaction) => transaction.accountId) ?? []).size;
   const committedPeriods = (imports ?? []).map((record) => ({ accountId: record.accountId, startDate: record.statementPeriodStart, endDate: record.statementPeriodEnd }));
   const coverageByAccount = new Map<string, Array<{ startDate: string; endDate: string }>>();
@@ -474,7 +479,7 @@ export const deriveHomepageView = ({
       incomeHistory: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "income")
         .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
         .map((transaction, index) => activityView(transaction, `cash-income-history-${index + 1}`)),
-      uncertainHistory: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "unknown")
+      uncertainHistory: visibleHistoryTransactions.filter(genuinelyUnknown)
         .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
         .map((transaction, index) => activityView(transaction, `cash-uncertain-history-${index + 1}`)),
     },
@@ -573,7 +578,7 @@ export const deriveHomepageView = ({
           message: "Imported transaction coverage is not connected on this device.",
         },
     attention: {
-      genuinelyUnknownCount: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "unknown" && !deferredReviewTransactionIds.has(transaction.id)).length,
+      genuinelyUnknownCount: visibleHistoryTransactions.filter(genuinelyUnknown).length,
       intentionallyDeferredCount: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "unknown" && deferredReviewTransactionIds.has(transaction.id)).length,
       categoryAmbiguityCount: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning !== "unknown" && SPENDING.has(transaction.financialMeaning) && transaction.attribution.category === null).length,
     },
