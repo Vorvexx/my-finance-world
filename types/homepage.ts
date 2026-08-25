@@ -13,6 +13,7 @@ export type HomepageActivity = {
   category: string | null;
   financialMeaning: string;
   needsReview: boolean;
+  understandingState: "understood" | "category-ambiguous" | "genuinely-unknown" | "intentionally-deferred";
   correction: { actionToken: string; suggestions: readonly BrowserReviewSuggestion[] } | null;
 };
 
@@ -114,7 +115,7 @@ export type HomepageViewModel = {
   status: "ready" | "partial" | "unavailable";
   currency: "CAD";
   snapshotDate: string | null;
-  period: { key: FinancialPeriodKey; label: string; days: number; startDate: string; endDate: string };
+  period: { key: FinancialPeriodKey; label: string; startDate: string; endDate: string; anchorDate: string; previousAnchor: string; nextAnchor: string };
   position: {
     netWorth: HomepageMoney;
     assets: HomepageMoney;
@@ -171,6 +172,7 @@ export type HomepageViewModel = {
     gaps: readonly { accountName: string; startDate: string; endDate: string }[];
     message: string;
   };
+  attention: { genuinelyUnknownCount: number; intentionallyDeferredCount: number; categoryAmbiguityCount: number };
   assistantSummary: readonly string[];
   insights: readonly HomepageInsight[];
 };

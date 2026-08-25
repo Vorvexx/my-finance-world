@@ -228,14 +228,14 @@ test("Lifestyle categories reconcile to eligible visible transactions", () => {
   assert.deepEqual(view.lifestyle.categories.map(({ label, total }) => ({ label, total })), [
     { label: "Dining", total: 80 },
     { label: "Groceries", total: 50 },
-    { label: "Needs Review", total: 25 },
+    { label: "Category unclear", total: 25 },
   ]);
   assert.equal(view.lifestyle.categories.reduce((sum, category) => sum + category.total, 0), 155);
   for (const category of view.lifestyle.categories) {
     assert.equal(category.transactions.reduce((sum, item) => sum + item.spendingImpact, 0), category.total);
   }
   assert.equal(view.lifestyle.unclassifiedCount, 2);
-  assert.equal(view.lifestyle.categories.find((category) => category.needsReview)?.transactions[0].needsReview, true);
+  assert.equal(view.lifestyle.categories.find((category) => category.label === "Category unclear")?.transactions[0].needsReview, false);
   const descriptions = view.lifestyle.categories.flatMap((category) => category.transactions.map((item) => item.description));
   assert.deepEqual(descriptions.sort(), ["Approved description 1", "Approved description 2", "Approved description 3", "Approved description 6"]);
 });
@@ -280,7 +280,7 @@ test("projects selectable recent facts and suppresses related payment double cou
   assert.deepEqual(view.recentAndUpcoming.summary, {
     inflow: { status: "known", amount: 100 },
     outflow: { status: "known", amount: 240 },
-    reviewNeededCount: 1,
+    reviewNeededCount: 0,
   });
   assert.equal(view.recentAndUpcoming.recent.length, 3);
   assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 100 });
@@ -289,7 +289,7 @@ test("projects selectable recent facts and suppresses related payment double cou
   assert.deepEqual(view.recentAndUpcoming.recent[0], {
     viewKey: "recent-1", date: "2099-08-03", description: "Approved description 3", amount: 200,
     direction: "outflow", kind: "payment", accountName: "Cash Account", category: null,
-    financialMeaning: "credit-card-payment", needsReview: false,
+    financialMeaning: "credit-card-payment", needsReview: false, understandingState: "understood",
     correction: null,
   });
   assert.deepEqual(view.recentAndUpcoming.upcoming[0], {
@@ -298,7 +298,7 @@ test("projects selectable recent facts and suppresses related payment double cou
   });
 });
 
-test("shared rolling periods apply identical boundaries to Cashflow, Lifestyle, detail, and timeline", () => {
+test("shared calendar periods apply identical boundaries to Cashflow, Lifestyle, detail, and timeline", () => {
   const dates = ["2099-08-08", "2099-08-02", "2099-07-26", "2099-07-10", "2099-05-11", "2098-08-09", "2098-08-08"];
   const values = [1, 2, 4, 8, 16, 32, 64];
   const transactions = dates.flatMap((transactionDate, index) => [
@@ -306,8 +306,8 @@ test("shared rolling periods apply identical boundaries to Cashflow, Lifestyle, 
     { ...transaction({ index: index + 40, meaning: "expense", amount: values[index] * 10, category: "Living" }), transactionDate },
   ]);
   const expectations = [
-    ["day", 1, 10, "2099-08-08"], ["week", 3, 30, "2099-08-02"], ["fortnight", 7, 70, "2099-07-26"],
-    ["month", 15, 150, "2099-07-10"], ["quarter", 31, 310, "2099-05-11"], ["year", 63, 630, "2098-08-09"],
+    ["day", 1, 10, "2099-08-08"], ["week", 1, 10, "2099-08-03"], ["month", 3, 30, "2099-08-01"],
+    ["quarter", 15, 150, "2099-07-01"], ["year", 31, 310, "2099-01-01"],
   ] as const;
   for (const [periodKey, moneyIn, moneyOut, startDate] of expectations) {
     const view = deriveHomepageView({ model, transactions, statementFacts: [facts], asOfDate: "2099-08-08", periodKey });
@@ -323,11 +323,13 @@ test("shared rolling periods apply identical boundaries to Cashflow, Lifestyle, 
   }
   const year = deriveHomepageView({ model, transactions, statementFacts: [facts], asOfDate: "2099-08-08", periodKey: "year" });
   assert.deepEqual(year.cashflow.monthlyHistory, [
-    { month: "2098-08", moneyIn: 32, moneyOut: 320, lifestyleSpending: 320 },
     { month: "2099-05", moneyIn: 16, moneyOut: 160, lifestyleSpending: 160 },
     { month: "2099-07", moneyIn: 12, moneyOut: 120, lifestyleSpending: 120 },
     { month: "2099-08", moneyIn: 3, moneyOut: 30, lifestyleSpending: 30 },
   ]);
+  const custom = deriveHomepageView({ model, transactions, statementFacts: [facts], asOfDate: "2099-08-08", periodKey: "custom", customStart: "2099-05-11", customEnd: "2099-07-26" });
+  assert.deepEqual(custom.cashflow.moneyIn, { status: "known", amount: 28 });
+  assert.deepEqual([custom.period.startDate, custom.period.endDate], ["2099-05-11", "2099-07-26"]);
 });
 
 test("distinguishes disconnected activity from an empty partial store without claiming zero", () => {
@@ -351,7 +353,7 @@ test("distinguishes disconnected activity from an empty partial store without cl
 test("distinguishes complete statement coverage from gaps in historical periods", () => {
   const complete = deriveHomepageView({
     model, transactions: [], statementFacts: [], asOfDate: "2099-08-08", periodKey: "month",
-    imports: [coveredImport("one", "2099-07-01", "2099-07-31"), coveredImport("two", "2099-08-01", "2099-08-08")],
+    imports: [coveredImport("one", "2099-08-01", "2099-08-31")],
   });
   assert.equal(complete.coverage.status, "complete");
   assert.equal(complete.coverage.gapCount, 0);
@@ -359,24 +361,24 @@ test("distinguishes complete statement coverage from gaps in historical periods"
 
   const partial = deriveHomepageView({
     model, transactions: [], statementFacts: [], asOfDate: "2099-08-08", periodKey: "month",
-    imports: [coveredImport("one", "2099-07-01", "2099-07-20"), coveredImport("two", "2099-07-25", "2099-08-08")],
+    imports: [coveredImport("one", "2099-08-01", "2099-08-20"), coveredImport("two", "2099-08-25", "2099-08-31")],
   });
   assert.equal(partial.coverage.status, "partial");
   assert.equal(partial.coverage.gapCount, 1);
-  assert.deepEqual(partial.coverage.gaps, [{ accountName: "Cash Account", startDate: "2099-07-21", endDate: "2099-07-24" }]);
+  assert.deepEqual(partial.coverage.gaps, [{ accountName: "Cash Account", startDate: "2099-08-21", endDate: "2099-08-24" }]);
 });
 
 test("does not let one account's continuous history mask another account's gap", () => {
   const view = deriveHomepageView({
     model, transactions: [], statementFacts: [], asOfDate: "2099-08-08", periodKey: "month",
     imports: [
-      coveredImport("cash", "2099-07-01", "2099-08-08"),
-      coveredImport("credit-before", "2099-07-01", "2099-07-20", "private-liability-id"),
-      coveredImport("credit-after", "2099-07-25", "2099-08-08", "private-liability-id"),
+      coveredImport("cash", "2099-08-01", "2099-08-31"),
+      coveredImport("credit-before", "2099-08-01", "2099-08-20", "private-liability-id"),
+      coveredImport("credit-after", "2099-08-25", "2099-08-31", "private-liability-id"),
     ],
   });
   assert.equal(view.coverage.status, "partial");
-  assert.deepEqual(view.coverage.gaps, [{ accountName: "TD Credit Card", startDate: "2099-07-21", endDate: "2099-07-24" }]);
+  assert.deepEqual(view.coverage.gaps, [{ accountName: "TD Credit Card", startDate: "2099-08-21", endDate: "2099-08-24" }]);
 });
 
 test("keeps missing canonical position unknown", () => {

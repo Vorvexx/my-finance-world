@@ -10,7 +10,7 @@ import { withRelationshipRuntime } from "../relationships/relationship-runtime.t
 import type { FinancialPeriodKey } from "./financial-period.ts";
 import { applyDeterministicAttribution } from "../transactions/attribution.ts";
 
-export const loadHomepageView = async ({ asOfDate, periodKey }: { asOfDate?: string; periodKey?: FinancialPeriodKey } = {}) => {
+export const loadHomepageView = async ({ asOfDate, periodKey, periodAnchor, customStart, customEnd }: { asOfDate?: string; periodKey?: FinancialPeriodKey; periodAnchor?: string; customStart?: string; customEnd?: string } = {}) => {
   const model = await loadCanonicalFinancialModel();
   const persisted = loadPersistedFinancialSources(model.money.accounts.map((account) => account.id));
   const today = new Date();
@@ -38,6 +38,9 @@ export const loadHomepageView = async ({ asOfDate, periodKey }: { asOfDate?: str
     investmentSnapshots: persisted?.investmentSnapshots ?? null,
     asOfDate: asOfDate ?? localDate,
     periodKey,
+    periodAnchor,
+    customStart,
+    customEnd,
     suppressedActivityTransactionIds: relationshipReadModel?.suppressedActivityTransactionIds,
     corrections,
     deferredReviewTransactionIds,

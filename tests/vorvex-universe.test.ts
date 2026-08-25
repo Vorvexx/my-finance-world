@@ -155,6 +155,7 @@ test("Global Product Contract freezes one indivisible orb and one HUD anatomy", 
   assert.match(styles, /@media \(max-height:700px\)/);
   assert.match(styles, /--vx-hud-reserve:218px/);
   assert.match(styles, /financial-hud:not\(\[data-open\]\)/);
+  assert.match(styles, /\.world-dock>\.financial-hud__expand\s*\{\s*position:absolute/);
   assert.match(styles, /VORVEX VISUAL & SPATIAL CONTRACT V1/);
   for (const icon of ["dining", "entertainment", "shopping", "convenience", "alcohol", "cannabis", "telecom", "subscriptions", "utilities", "review"])
     assert.match(icons, new RegExp(`icon === \\\"${icon}\\\"|icon=\\\"${icon}\\\"`));
