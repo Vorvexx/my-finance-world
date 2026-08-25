@@ -5,7 +5,7 @@ import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
 import type { HomepageAccount, HomepageActivity, HomepageMoney, HomepageViewModel } from "../../types/homepage.ts";
 import type { CanonicalTransaction, FinancialMeaning } from "../../types/transactions.ts";
 import { financialPeriod, type FinancialPeriodKey } from "./financial-period.ts";
-import { detectRecurringPatterns } from "./recurring-patterns.ts";
+import { detectMissingExpectedEvents, detectRecurringPatterns } from "./recurring-patterns.ts";
 
 export type HomepageFinancialSources = {
   model: CanonicalFinancialModel;
@@ -232,6 +232,7 @@ export const deriveHomepageView = ({
     category: transaction.attribution.category, financialMeaning: transaction.financialMeaning,
     needsReview: transaction.financialMeaning === "unknown"
       || (SPENDING.has(transaction.financialMeaning) && transaction.attribution.category === null),
+    correction: corrections.get(transaction.id) ?? null,
   });
   const recent = [...visiblePeriodTransactions]
     .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate) || right.postedDate?.localeCompare(left.postedDate ?? "") || 0)
@@ -272,6 +273,7 @@ export const deriveHomepageView = ({
       accountName: accountNames.get(facts.accountId) ?? "Unknown account",
     }));
   const recurringPatterns = detectRecurringPatterns(transactions ?? [], asOfDate);
+  const missingExpectedEvents = detectMissingExpectedEvents(transactions ?? [], asOfDate);
   const expectedUpcoming = recurringPatterns.map((pattern, index) => ({
     viewKey: `upcoming-expected-${index + 1}`,
     certainty: "expected" as const,
@@ -358,6 +360,7 @@ export const deriveHomepageView = ({
     if (!current || statement.statementDate > current.statementDate) latestStatementByAccount.set(statement.accountId, statement);
   }
   const insights = [
+    ...missingExpectedEvents.map((event) => ({ title: event.label, detail: `The latest matching fee passed its usual rebate window on ${event.expectedBy}; ${event.evidenceCount} prior fee-and-rebate observations support this expectation.`, tone: "attention" as const })),
     ...(spendingCents > 0 ? [{ title: `${Math.round(understoodSpendingCents / spendingCents * 100)}% of spending value understood`, detail: `${fromCents(understoodSpendingCents).toLocaleString("en-CA", { style: "currency", currency: "CAD" })} of ${fromCents(spendingCents).toLocaleString("en-CA", { style: "currency", currency: "CAD" })} has a canonical category for this period.`, tone: "positive" as const }] : []),
     ...(topCategories[0] ? [{ title: `${topCategories[0].category} is the largest spending category`, detail: `${topCategories[0].amount.toLocaleString("en-CA", { style: "currency", currency: "CAD" })} in the selected ${selectedPeriod.label.toLowerCase()}.`, tone: "neutral" as const }] : []),
     ...(knownUpcoming[0] ? [{ title: "A known credit-card obligation is approaching", detail: `Minimum payment is due ${knownUpcoming[0].date}.`, tone: "attention" as const }] : []),
@@ -376,8 +379,12 @@ export const deriveHomepageView = ({
     },
     cash: {
       total: positionAvailable && model.totalsByWorld.cash !== null ? money(model.totalsByWorld.cash) : unknown("Cash balance is unavailable."),
-      accountCount: cashAccounts.length,
-      accounts: cashAccounts.map((account, index) => ({ ...accountView(account, "cash", index), activity: accountActivity(account.id) })),
+      accountCount: cashAccounts.length + liabilityAccounts.filter((account) => accountType(account.name, "liabilities") === "Credit card").length,
+      accounts: [
+        ...cashAccounts.map((account, index) => ({ ...accountView(account, "cash", index), activity: accountActivity(account.id) })),
+        ...liabilityAccounts.filter((account) => accountType(account.name, "liabilities") === "Credit card")
+          .map((account, index) => ({ ...accountView(account, "liabilities", index, latestStatementByAccount.get(account.id)), activity: accountActivity(account.id) })),
+      ],
     },
     investments: {
       total: positionAvailable && model.totalsByWorld.investments !== null ? money(model.totalsByWorld.investments) : unknown("Investment balance is unavailable."),

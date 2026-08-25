@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-24
+
+- Consolidated Cash and Cashflow into one everyday-money World while preserving canonical cashflow calculations.
+- Projected TD Credit Card into Cash and financing into Home/Vehicle without duplicating records.
+- Added traceable account/recent transaction correction, conservative merchant rules, recurrence-backed missing-event detection, and a Chrome-specific Finder launcher.
+
 ## 2026-08-15 — Visual & Spatial Foundation V1
 
 - Replaced the row/legacy-offset constellation with one count-driven `FinancialConstellation` engine.

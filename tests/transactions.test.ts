@@ -174,3 +174,17 @@ test("queries recent, pending, account, World, and period totals", () => {
     net: 3119.75,
   });
 });
+
+test("merchant intelligence classifies narrow identities but leaves ambiguous retailers Unknown", () => {
+  const make = (description: string, index: number) => ingestTransactions([raw({
+    description, financialMeaning: "unknown", sourceRecordId: `merchant-${index}`,
+    fingerprint: { version: "test-v1", value: `merchant-${index}` },
+  })]).transactions[0];
+  const [coffee, telecom, subscription, ambiguous] = applyDeterministicAttribution([
+    make("STARBUCKS 1234", 1), make("ROGERS WIRELESS", 2), make("NETFLIX.COM", 3), make("WALMART SUPERCENTRE", 4),
+  ]);
+  assert.equal(coffee.attribution.category, "Dining");
+  assert.equal(telecom.attribution.category, "Telecom");
+  assert.equal(subscription.attribution.category, "Subscriptions");
+  assert.equal(ambiguous.attribution.category, null);
+});

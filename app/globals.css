@@ -567,6 +567,9 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
 .financial-hud .pnn-grid section strong { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; font-size:var(--vx-type-hud-primary); }
 .financial-hud .pnn-grid section small { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:3; font-size:var(--vx-type-hud-secondary); }
 .financial-hud .activity-stream li:nth-child(n+4),.financial-hud .pnn-grid section>span:nth-of-type(n+4) { display:none; }
+.account-transaction-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08) }
+.account-transaction-groups h3 { margin-bottom:6px; font-size:var(--vx-type-hud-eyebrow); color:#9fb0c5 }
+.inline-correction-wrap { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap }.transaction-undo { color:#a9bad0; font-size:.68rem; text-decoration:underline }
 .financial-hud>.financial-hud__close { position:absolute; z-index:100; top:12px; right:14px; }
 
 .financial-intelligence { position:fixed; z-index:18; top:136px; right:28px; width:238px; max-height:210px; padding:15px 17px; overflow:auto; border:1px solid rgba(170,202,255,.12); border-radius:18px; background:linear-gradient(165deg,rgba(11,18,38,.7),rgba(4,9,21,.82)); backdrop-filter:blur(18px); animation:financial-hud-arrive .32s .15s var(--vx-motion-ease) both; }

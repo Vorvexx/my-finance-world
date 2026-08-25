@@ -23,14 +23,15 @@ test("Universe consumes only the browser-safe homepage view", async () => {
 
 test("Universe exposes factual recursive Worlds and compact detail surfaces", async () => {
   const component = await readFile(componentPath, "utf8");
-  for (const world of ["Cash", "Investments", "Liabilities", "Home", "Vehicle", "Lifestyle", "Cashflow"])
+  for (const world of ["Cash", "Investments", "Home", "Vehicle", "Lifestyle"])
     assert.equal(component.includes(`label: "${world}"`), true, world);
+  assert.doesNotMatch(component, /\{ key: "(?:liabilities|cashflow)", label:/);
   for (const phrase of [
     "SpatialChild", "accountChildren", "CashflowChildDetail", "selectedCashflow", "Money In", "Money Out", "Recent", "Upcoming",
     "Nothing known yet", "CategoryDetail", "supporting transaction", "Review these uncategorized transactions", "RealWorldDetail",
     "Property value", "Vehicle financing", "Add factual information", "Net Worth", "journey-trail",
     "FinancialConstellation", "FinancialOrb", "FinancialWorldIcon", "WebglAurora", "pnn-grid", "IntelligenceRail", "Lifestyle spending",
-    "Obligations", "Cashflow", "Contribution portions are context only and are never added",
+    "Everyday money", "Payments · excluded from spending", "Contribution portions are context only and are never added",
     "Latest known statement", "does not replace or add to the canonical liability balance",
   ]) assert.equal(component.includes(phrase), true, phrase);
   assert.match(component, /: "Unavailable"/);
@@ -68,14 +69,14 @@ test("information surfaces close independently from spatial navigation", async (
   assert.match(hud, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
-  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
+  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedFinancing\(false\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
   assert.match(component, /onClick=\{isParent \? leaveObject : \(\) => selectWorld\(world\.key\)\}/);
   assert.match(component, /aria-label=\{isParent \? `Return to \$\{world\.label\}` : undefined\}/);
 });
 
 test("intelligence is contextual rather than a repeated global feed", async () => {
   const component = await readFile(componentPath, "utf8");
-  for (const context of ['world === "cash"', 'world === "cashflow"', 'world === "lifestyle"', 'world === "investments"', 'world === "liabilities"']) assert.equal(component.includes(context), true, context);
+  for (const context of ['world === "cash"', 'world === "lifestyle"', 'world === "investments"']) assert.equal(component.includes(context), true, context);
   assert.doesNotMatch(component, /view\.insights\.map/);
 });
 

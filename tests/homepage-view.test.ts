@@ -93,6 +93,8 @@ test("derives canonical position and known World balances without statement doub
   assert.deepEqual(view.position.assets, { status: "known", amount: 9000 });
   assert.deepEqual(view.position.liabilities, { status: "known", amount: 10400 });
   assert.deepEqual(view.cash.total, { status: "known", amount: 1000 });
+  assert.equal(view.cash.accountCount, 2);
+  assert.equal(view.cash.accounts.some((account) => account.accountType === "Credit card" && account.displayName === "TD Credit Card"), true);
   assert.deepEqual(view.investments.total, { status: "known", amount: 8000 });
   assert.equal(view.investments.accounts.length, 4);
   assert.equal(view.investments.accounts.reduce((sum, account) => sum + (account.balance.status === "known" ? account.balance.amount : 0), 0), 8000);
@@ -108,6 +110,7 @@ test("derives canonical position and known World balances without statement doub
   assert.equal(view.liabilities.accounts.length, 2);
   assert.equal(view.liabilities.accounts.reduce((sum, account) => sum + (account.balance.status === "known" ? account.balance.amount : 0), 0), 10400);
   const card = view.liabilities.accounts.find((account) => account.displayName === "TD Credit Card");
+  assert.equal(view.cash.accounts.find((account) => account.displayName === "TD Credit Card")?.statement?.minimumPayment, 25);
   assert.deepEqual(card?.statement, {
     statementDate: "2099-08-04",
     paymentDueDate: "2099-08-25",
@@ -284,6 +287,7 @@ test("projects selectable recent facts and suppresses related payment double cou
     viewKey: "recent-1", date: "2099-08-03", description: "Approved description 3", amount: 200,
     direction: "outflow", kind: "payment", accountName: "Cash Account", category: null,
     financialMeaning: "credit-card-payment", needsReview: false,
+    correction: null,
   });
   assert.deepEqual(view.recentAndUpcoming.upcoming[0], {
     viewKey: "upcoming-known-1", certainty: "known", date: "2099-08-25", amount: 25, statementBalance: 400,

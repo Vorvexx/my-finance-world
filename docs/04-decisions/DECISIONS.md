@@ -4,6 +4,16 @@
 
 This log records approved, durable product, architecture, and operating decisions. It explains why a decision exists so future contributors do not reopen it accidentally. New evidence may change a decision through a later dated entry; earlier reasoning remains part of the record.
 
+## 2026-08-24 — Cash Is the Everyday-Money World and Financial Types Project Contextually
+
+- Date: 2026-08-24
+- Decision: Cash owns everyday-money navigation, including cash accounts, credit cards, Money In, Money Out, Recent, and Upcoming. Cashflow and liability remain canonical analytical/domain concepts but are not mandatory top-level Worlds. Credit cards project into Cash, vehicle financing into Vehicle, and mortgages into Home without duplicating canonical records.
+- Context: Separate Cash/Cashflow/Liabilities navigation repeated concepts and made canonical type dictate user location.
+- Rationale: A person should find an object where it is useful while every balance and transaction retains one authoritative source.
+- Consequences: Top-level navigation has five Worlds; contextual projections reference the existing account/transaction objects and preserve liability, cashflow, statement, relationship, and net-worth calculations.
+- Status: Approved and implemented
+- Related documents, branch, or commit: `founder/latest-correct`, Cash + Transaction Intelligence V1
+
 ## 2026-08-08 — Founder Production Runtime v1 Is macOS-Only and Local
 
 - Date: 2026-08-08

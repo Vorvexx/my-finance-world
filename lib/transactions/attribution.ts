@@ -18,7 +18,7 @@ export const defaultWorldAttributionRules: readonly WorldAttributionRule[] = [
   { id: "vehicle-transit", pattern: /\b(parking|public transit|toll)\b/i, world: "vehicle", category: "Transit", confidence: 0.92 },
   { id: "home-insurance", pattern: /\b(home insurance|property insurance)\b/i, world: "home", category: "Insurance", confidence: 0.96 },
   { id: "insurance-provider", pattern: /\b(?:SECURITY NATIONAL INSUR|INSURANCE)\b/i, world: "home", category: "Insurance", confidence: 0.95 },
-  { id: "lifestyle-coffee-dining", pattern: /\b(?:TIM HORTONS|MCDONALD'?S|UBER\*?\s*EATS|UBEREATS|RESTAURANT|CAFE|COFFEE SHOP|DINING|ROADHOUSE|GASTROPUB|TAKEOUT)\b/i, world: "cash", category: "Dining", confidence: 0.96 },
+  { id: "lifestyle-coffee-dining", pattern: /\b(?:TIM HORTONS|STARBUCKS|MCDONALD'?S|WENDY'?S|SUBWAY|DOMINO'?S|KFC|SWISS CHALET|UBER\*?\s*EATS|UBEREATS|RESTAURANT|CAFE|COFFEE SHOP|DINING|ROADHOUSE|GASTROPUB|TAKEOUT)\b/i, world: "cash", category: "Dining", confidence: 0.96 },
   { id: "lifestyle-grocery-merchants", pattern: /\b(?:WHOLE FOODS|FOOD CENTRE|GROCERY|GROCERS|SUPERMARKET|TOWN & COUNTRY MARKET|SUBZI MANDI)\b/i, world: "cash", category: "Groceries", confidence: 0.96 },
   { id: "lifestyle-convenience", pattern: /\b(?:CIRCLE K|MACS CONV)\b/i, world: "cash", category: "Convenience", confidence: 0.94 },
   { id: "lifestyle-alcohol", pattern: /\b(?:LCBO|RAO #)\b/i, world: "cash", category: "Alcohol", confidence: 0.98 },
@@ -26,8 +26,7 @@ export const defaultWorldAttributionRules: readonly WorldAttributionRule[] = [
   { id: "lifestyle-telecom-provider", pattern: /\b(?:ROGERS|BELL CANADA)\b/i, world: "cash", category: "Telecom", confidence: 0.96 },
   { id: "lifestyle-fuel-provider", pattern: /\b(?:ESSO|PETRO-CANADA|GAS STATION)\b/i, world: "vehicle", category: "Fuel", confidence: 0.97 },
   { id: "lifestyle-travel", pattern: /\b(?:DELTA AIR|AIR FRANCE|AIRBNB|HILTON HOTELS|KIWI\.COM|TRAVELGO)\b/i, world: "cash", category: "Travel", confidence: 0.96 },
-  { id: "lifestyle-subscription", pattern: /\b(?:AMAZON\.CA PRIME MEMBER)\b/i, world: "cash", category: "Subscriptions", confidence: 0.98 },
-  { id: "lifestyle-shopping", pattern: /\b(?:WAL-?MART|WALMART\.CA)\b/i, world: "cash", category: "Shopping", confidence: 0.94 },
+  { id: "lifestyle-subscription", pattern: /\b(?:AMAZON\.CA PRIME MEMBER|NETFLIX|SPOTIFY)\b/i, world: "cash", category: "Subscriptions", confidence: 0.98 },
   { id: "home-alectra", pattern: /\bALECTRA\b/i, world: "home", category: "Utilities", confidence: 0.98 },
 ];
 

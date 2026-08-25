@@ -13,6 +13,7 @@ export type HomepageActivity = {
   category: string | null;
   financialMeaning: string;
   needsReview: boolean;
+  correction: { actionToken: string; suggestions: readonly BrowserReviewSuggestion[] } | null;
 };
 
 export type HomepageCategoryTotal = { category: string; amount: number };

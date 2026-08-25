@@ -89,6 +89,8 @@ test("LaunchAgent template receives an explicit Node executable search path", ()
   assert.match(installer, /launcher\.swift/);
   const launcher = readFileSync(path.join(process.cwd(), "packaging", "launcher.swift"), "utf8");
   assert.ok(launcher.indexOf("Data(contentsOf: url)") < launcher.indexOf('arguments = ["kickstart"'));
+  assert.match(launcher, /com\.google\.Chrome/);
+  assert.match(launcher, /open\(\[url\], withApplicationAt: chrome/);
 });
 
 test("production keeps the PDF engine external so its worker remains resolvable", () => {

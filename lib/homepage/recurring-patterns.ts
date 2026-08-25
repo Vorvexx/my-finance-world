@@ -12,6 +12,12 @@ export type RecurringPattern = {
   evidenceCount: number;
 };
 
+export type MissingExpectedEvent = {
+  label: string;
+  expectedBy: string;
+  evidenceCount: number;
+};
+
 const DAY = 86_400_000;
 const dateValue = (date: string) => Date.parse(`${date}T00:00:00.000Z`);
 const addDays = (date: string, days: number) => new Date(dateValue(date) + days * DAY).toISOString().slice(0, 10);
@@ -74,4 +80,25 @@ export const detectRecurringPatterns = (
   }
   return patterns.sort((left, right) => left.expectedDate.localeCompare(right.expectedDate)
     || left.label.localeCompare(right.label)).slice(0, 8);
+};
+
+export const detectMissingExpectedEvents = (
+  transactions: readonly CanonicalTransaction[],
+  asOfDate: string,
+): readonly MissingExpectedEvent[] => {
+  const bankingFees = transactions.filter((transaction) => transaction.direction === "outflow"
+    && transaction.financialMeaning === "fee" && /^(?:bank|banking) fees$/i.test(transaction.attribution.category ?? ""))
+    .sort((left, right) => left.transactionDate.localeCompare(right.transactionDate));
+  const rebates = transactions.filter((transaction) => transaction.direction === "inflow"
+    && (transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal")
+    && /^(?:bank|banking) fees$/i.test(transaction.attribution.category ?? ""));
+  if (bankingFees.length < 3 || rebates.length < 3) return [];
+  const priorMatches = bankingFees.slice(0, -1).filter((fee) => rebates.some((rebate) =>
+    rebate.transactionDate >= fee.transactionDate && rebate.transactionDate <= addDays(fee.transactionDate, 7))).length;
+  if (priorMatches < 3) return [];
+  const latest = bankingFees.at(-1)!;
+  const expectedBy = addDays(latest.transactionDate, 7);
+  const matched = rebates.some((rebate) => rebate.transactionDate >= latest.transactionDate && rebate.transactionDate <= expectedBy);
+  if (matched || asOfDate <= expectedBy || asOfDate > addDays(expectedBy, 14)) return [];
+  return [{ label: "Expected bank-fee rebate not seen", expectedBy, evidenceCount: priorMatches }];
 };
