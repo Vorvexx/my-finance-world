@@ -200,7 +200,7 @@ test("uses financial meaning before category for spending and income", () => {
   assert.deepEqual(view.cashflow.topOutflows.map((item) => item.amount), [100, 50]);
   assert.deepEqual(view.cashflow.inflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
     { label: "Income", total: 500, includedInPrimaryTotal: true },
-    { label: "Dining", total: 20, includedInPrimaryTotal: true },
+    { label: "Refund / Rebate · Dining", total: 20, includedInPrimaryTotal: true },
     { label: "Card settlement", total: 200, includedInPrimaryTotal: false },
   ]);
   assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [

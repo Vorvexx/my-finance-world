@@ -14,6 +14,7 @@ import { categoryIcon, VorvexIcon, type VorvexIconKey } from "@/components/vorve
 export type WorldKey = "cash" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "cashflow";
 type NavigationWorldKey = Exclude<WorldKey, "liabilities" | "cashflow">;
 type CashflowChildKey = "money-in" | "money-out" | "recent" | "upcoming";
+type FlowGroup = HomepageViewModel["cashflow"]["outflowGroups"][number];
 type SpatialChild = { key: string; label: string; value: string; tone: FinancialOrbAccent; icon: ReactNode; reviewState?: boolean; selected: boolean; select: () => void };
 
 const WORLD_META: ReadonlyArray<{ key: NavigationWorldKey; label: string; tone: FinancialOrbAccent }> = [
@@ -85,6 +86,7 @@ function AccountDetail({ account, world, view }: { account: HomepageAccount; wor
     {isCreditCard && <section className="account-transaction-groups"><ActivityList title="Purchases" items={account.activity.purchases} currency={account.currency} empty="No purchases in this period." /><ActivityList title="Refunds" items={account.activity.refunds} currency={account.currency} empty="No refunds in this period." /><ActivityList title="Payments · excluded from spending" items={account.activity.payments} currency={account.currency} empty="No payment activity in this period." /></section>}
     {isCreditCard && <section className="card-reconciliation financial-hud__expanded-evidence"><h3>Card cycle · {view.period.displayLabel}</h3><dl><div><dt>Purchases charged</dt><dd>{formatMoney(account.activity.reconciliation.purchases, account.currency)}</dd></div><div><dt>Refunds / credits</dt><dd>+{formatMoney(account.activity.reconciliation.refunds, account.currency)}</dd></div><div><dt>Payments from Cash</dt><dd>{formatMoney(account.activity.reconciliation.payments, account.currency)}</dd></div>{account.statement && <><div><dt>Statement balance · {account.statement.statementDate}</dt><dd>{formatMoney(account.statement.statementBalance, account.currency)}</dd></div><div><dt>Minimum due · {account.statement.paymentDueDate}</dt><dd>{formatMoney(account.statement.minimumPayment, account.currency)}</dd></div></>}</dl><small>Payments settle the liability and never become a second spending event. Statement cycles may differ from the selected activity period.</small></section>}
     {world === "cash" && <section className="account-transaction-groups financial-hud__expanded-evidence"><ActivityList title="Recorded income · all imported coverage" items={account.activity.incomeHistory} currency={account.currency} empty="No supported income is recorded for this account." /><ActivityList title="Still uncertain · all imported coverage" items={account.activity.uncertainHistory} currency={account.currency} empty="No genuinely uncertain activity remains for this account." /></section>}
+    {world === "cash" && !isCreditCard && <section className="account-circulation financial-hud__expanded-evidence"><h3>Account circulation · {view.period.displayLabel}</h3><dl><div><dt>Recorded position</dt><dd>{moneyLabel(account.balance, account.currency)}</dd></div><div><dt>Money received</dt><dd>{formatMoney(account.activity.moneyIn, account.currency)}</dd></div><div><dt>Money sent</dt><dd>{formatMoney(account.activity.moneyOut, account.currency)}</dd></div><div><dt>Card settlements</dt><dd>{formatMoney(account.activity.reconciliation.payments, account.currency)}</dd></div></dl><small>Position recorded {account.freshness.status === "known" ? account.freshness.asOf : "on an Unknown date"}; transfers, settlements, fees and rebates retain their canonical meanings.</small><div className="account-transaction-groups"><ActivityList title="Significant received" items={account.activity.recent.filter((item) => item.direction === "inflow").sort((left, right) => right.amount - left.amount)} currency={account.currency} empty="No received activity in this period." /><ActivityList title="Significant sent" items={account.activity.recent.filter((item) => item.direction === "outflow").sort((left, right) => right.amount - left.amount)} currency={account.currency} empty="No sent activity in this period." /><ActivityList title="Card settlements" items={account.activity.payments} currency={account.currency} empty="No card settlement in this period." /></div></section>}
     {account.contributionBreakdown && <section className="contribution-facts">
       <h3>Contribution breakdown</h3>
       {account.contributionBreakdown.status === "known" ? <dl><div><dt>Employee</dt><dd>{formatMoney(account.contributionBreakdown.employee, account.currency)}</dd></div><div><dt>Employer</dt><dd>{formatMoney(account.contributionBreakdown.employer, account.currency)}</dd></div></dl> : <p><strong>Unknown</strong>{account.contributionBreakdown.message}</p>}
@@ -110,6 +112,10 @@ function ActivityList({ title, items, currency, empty, onSelect }: { title: stri
 
 function FlowGroups({ title, groups, currency }: { title: string; groups: HomepageViewModel["cashflow"]["outflowGroups"]; currency: string }) {
   return <section className="flow-groups"><h3>{title}</h3>{groups.map((group) => <details key={group.key}><summary><span><strong>{group.label}</strong><small>{group.includedInPrimaryTotal ? "Included in primary total" : "Cash movement · excluded from spending total"}</small></span><b>{formatMoney(group.total, currency)}</b></summary><ActivityList title="Canonical transactions" items={group.transactions} currency={currency} empty="No transactions." /></details>)}</section>;
+}
+
+function FlowGroupDetail({ group, direction, currency }: { group: FlowGroup; direction: "inflow" | "outflow"; currency: string }) {
+  return <><p className="world-kicker">Cash · Money {direction === "inflow" ? "In" : "Out"} · Context</p><h2>{group.label}</h2><div className="pnn-grid two"><section><p>Selected period</p><strong className="pnn-value">{formatMoney(group.total, currency)}</strong><small>{group.includedInPrimaryTotal ? `Reconciles into Money ${direction === "inflow" ? "In" : "Out"}.` : "Contextual cash movement; excluded from primary spending/income totals."}</small></section><section><p>Canonical evidence</p><strong>{group.transactions.length} transaction{group.transactions.length === 1 ? "" : "s"}</strong><small>One canonical transaction may appear here and in its World without duplication.</small></section></div><section className="financial-hud__expanded-evidence"><ActivityList title="Supporting transactions" items={group.transactions} currency={currency} empty="No supporting evidence." /></section></>;
 }
 
 function IntelligenceRail({ view, world, account, category }: { view: HomepageViewModel; world: NavigationWorldKey; account: HomepageAccount | null; category: HomepageLifestyleCategory | null }) {
@@ -162,7 +168,7 @@ function RealWorldDetail({ title, heading, object, currency, manageFacts = false
 }
 
 const nodeValue = (world: NavigationWorldKey, view: HomepageViewModel) => {
-  if (world === "cash") return moneyLabel(view.cash.total, view.currency);
+  if (world === "cash") return "Everyday circulation";
   if (world === "investments") return moneyLabel(view.investments.total, view.currency);
   if (world === "home") return view.home.asset ? moneyLabel(view.home.asset.value, view.currency) : view.home.financing ? "Financing known" : "Unknown";
   if (world === "vehicle") return view.vehicle.financing ? "Financing known" : "Unknown";
@@ -176,6 +182,7 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
   const [selectedRealWorldCategory, setSelectedRealWorldCategory] = useState<string | null>(null);
   const [selectedFinancing, setSelectedFinancing] = useState(false);
   const [selectedCashflow, setSelectedCashflow] = useState<CashflowChildKey | null>(null);
+  const [selectedFlowGroup, setSelectedFlowGroup] = useState<FlowGroup | null>(null);
   const [surfaceOpen, setSurfaceOpen] = useState(false);
   const [travelling, setTravelling] = useState(false);
   const [surfaceAfterTravel, setSurfaceAfterTravel] = useState(false);
@@ -192,9 +199,9 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
   }, [travelling, surfaceAfterTravel]);
   const selectedLifestyleCategory = selectedLifestyle ? view.lifestyle.categories.find((category) => category.label === selectedLifestyle) ?? null : null;
   const selectedWorldCategory = selectedRealWorldCategory && (selected === "home" || selected === "vehicle") ? view[selected].categories.find((category) => category.label === selectedRealWorldCategory) ?? null : null;
-  const selectWorld = (world: NavigationWorldKey) => { setSelected(world); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); beginTravel(true); };
-  const leaveWorld = () => { setSelected(null); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); beginTravel(false); };
-  const leaveObject = () => { setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); beginTravel(true); };
+  const selectWorld = (world: NavigationWorldKey) => { setSelected(world); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); setSelectedFlowGroup(null); beginTravel(true); };
+  const leaveWorld = () => { setSelected(null); setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); setSelectedFlowGroup(null); beginTravel(false); };
+  const leaveObject = () => { setSelectedAccount(null); setSelectedLifestyle(null); setSelectedRealWorldCategory(null); setSelectedFinancing(false); setSelectedCashflow(null); setSelectedFlowGroup(null); beginTravel(true); };
   const closeSurface = () => { setSurfaceAfterTravel(false); setSurfaceOpen(false); };
   const accountWorld = selected === "cash" || selected === "investments" ? selected : null;
   const worldAccounts = accountWorld ? view[accountWorld].accounts : [];
@@ -213,13 +220,26 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
     { key: "upcoming", label: "Upcoming", value: `${view.recentAndUpcoming.upcoming.length} known + expected`, tone: "cashflow", icon: "upcoming" },
   ];
   const cashflowChildren: SpatialChild[] = selected === "cash" ? cashflowDefinitions.map((child) => ({ ...child, tone: "cash" as const, icon: <VorvexIcon icon={child.icon} />, selected: selectedCashflow === child.key, select: () => { setSelectedCashflow(child.key); beginTravel(true); } })) : [];
-  const spatialChildren = [...accountChildren, ...lifestyleChildren, ...realWorldChildren, ...cashflowChildren];
+  const circulationGroups = selectedCashflow === "money-in" ? view.cashflow.inflowGroups : selectedCashflow === "money-out" ? view.cashflow.outflowGroups : [];
+  const circulationIcon = (group: FlowGroup): VorvexIconKey => group.label === "Home" ? "home" : group.label === "Vehicle" ? "vehicle" : group.label === "Investments" ? "investments" : group.label === "Lifestyle" ? "lifestyle" : group.label.includes("Card") ? "liabilities" : selectedCashflow === "money-in" ? "income" : "outflow";
+  const circulationTone = (group: FlowGroup): FinancialOrbAccent => group.label === "Home" ? "home" : group.label === "Vehicle" ? "vehicle" : group.label === "Investments" ? "investments" : group.label === "Lifestyle" ? "lifestyle" : group.label.includes("Card") ? "liabilities" : "cashflow";
+  const openFlowGroup = (group: FlowGroup) => {
+    if (group.label === "Home") return selectWorld("home");
+    if (group.label === "Vehicle") return selectWorld("vehicle");
+    if (group.label === "Investments") return selectWorld("investments");
+    if (group.label === "Lifestyle") return selectWorld("lifestyle");
+    if (group.label.includes("Card")) { const card = view.cash.accounts.find((account) => account.accountType === "Credit card"); if (card) { setSelectedCashflow(null); setSelectedFlowGroup(null); setSelectedAccount(card); beginTravel(true); return; } }
+    setSelectedFlowGroup(group); beginTravel(true);
+  };
+  const circulationChildren: SpatialChild[] = circulationGroups.map((group) => ({ key: `circulation-${group.key}`, label: group.label, value: formatMoney(group.total, view.currency), tone: circulationTone(group), icon: <VorvexIcon icon={circulationIcon(group)} />, selected: false, select: () => openFlowGroup(group) }));
+  const spatialChildren = circulationGroups.length ? [...cashflowChildren.filter((child) => child.selected), ...circulationChildren] : [...accountChildren, ...lifestyleChildren, ...realWorldChildren, ...cashflowChildren];
   const activeTone = selected ?? "net-worth";
+  const hudContextKey = [selected, selectedAccount?.viewKey, selectedLifestyleCategory?.viewKey, selectedWorldCategory?.viewKey, selectedFinancing ? "financing" : "", selectedCashflow, selectedFlowGroup?.key].filter(Boolean).join(":");
   return <main className={`universe-shell depth-${depth} ${selected ? `world-${selected}` : ""} ${travelling ? "is-travelling" : ""}`} aria-busy={travelling}>
     <WebglAurora />
     <div className="space-dust" aria-hidden="true" />
     <header className="universe-header"><div><button type="button" className="universe-brand" onClick={leaveWorld} aria-label="Return to Universe">Vorvex</button><span>{view.snapshotDate ?? "Snapshot unavailable"}</span></div><nav className="header-actions" aria-label="Financial data tools"><Link href="/facts">My data</Link><Link href="/statements">Add statements</Link><Link href="/review" className="header-review">Genuinely Unknown {view.attention.genuinelyUnknownCount > 0 && <span>{view.attention.genuinelyUnknownCount}</span>}</Link></nav></header>
-    <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Universe</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? selectedWorldCategory?.label ?? (selectedFinancing && (selected === "home" || selected === "vehicle") ? view[selected].financing?.displayName : null) ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
+    <nav className="journey-trail" aria-label="Current location"><button type="button" onClick={leaveWorld} aria-current={!selected ? "page" : undefined}>Universe</button>{selected && <><span>›</span><button type="button" onClick={() => selectWorld(selected)} aria-current={depth === "world" ? "page" : undefined}>{WORLD_META.find((world) => world.key === selected)?.label}</button></>}{depth === "object" && <><span>›</span><b>{selectedFlowGroup?.label ?? selectedAccount?.displayName ?? selectedLifestyleCategory?.label ?? selectedWorldCategory?.label ?? (selectedFinancing && (selected === "home" || selected === "vehicle") ? view[selected].financing?.displayName : null) ?? cashflowDefinitions.find((child) => child.key === selectedCashflow)?.label ?? "Detail"}</b></>}</nav>
     {selected && <TimeNavigator period={view.period} />}
     <FinancialScene depth={depth} tone={activeTone} travelling={travelling}>
       <SpatialTransition active={travelling} />
@@ -227,15 +247,17 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
         <FinancialOrb name="Net Worth" value={moneyLabel(view.position.netWorth, view.currency)} icon={<VorvexIcon icon="net-worth" />} accent="net-worth" size="hero" state={selected ? "receded" : "selected"} onClick={leaveWorld} aria-label="Return to your universe" />
       </div>
       <FinancialConstellation label="Financial constellation">{WORLD_META.map((world) => { const isParent = depth === "object" && selected === world.key; const state = isParent ? "parent" : selected === world.key ? "selected" : selected ? "receded" : "idle"; return <FinancialOrb key={world.key} name={world.label} value={nodeValue(world.key, view)} icon={<FinancialWorldIcon world={world.key} />} accent={world.tone} size={selected === world.key ? "primary" : "secondary"} state={state} onClick={isParent ? leaveObject : () => selectWorld(world.key)} aria-label={isParent ? `Return to ${world.label}` : undefined} aria-pressed={selected === world.key} />; })}</FinancialConstellation>
-      <FinancialConstellation label={selected ? `${selected} objects` : "Financial objects"} role="children">{spatialChildren.map((child) => <FinancialOrb key={child.key} name={child.label} value={child.value} icon={child.icon} accent={child.tone} size={child.selected ? "primary" : "secondary"} state={child.selected ? "selected" : depth === "object" ? "receded" : "idle"} className={child.reviewState ? "financial-orb--review-state" : ""} onClick={child.select} />)}</FinancialConstellation>
+      <FinancialConstellation label={selected ? `${selected} objects` : "Financial objects"} role="children">{spatialChildren.map((child) => <FinancialOrb key={child.key} name={child.label} value={child.value} icon={child.icon} accent={child.tone} size={child.selected ? "primary" : "secondary"} state={child.selected ? "selected" : depth === "object" && circulationGroups.length === 0 ? "receded" : "idle"} className={child.reviewState ? "financial-orb--review-state" : ""} onClick={child.select} />)}</FinancialConstellation>
     </FinancialScene>
     {selected && (selectedAccount || selectedLifestyleCategory || selectedWorldCategory || selectedFinancing) && <IntelligenceRail view={view} world={selected} account={selectedAccount} category={selectedLifestyleCategory ?? selectedWorldCategory} />}
-    {selected && !travelling && <FinancialHud open={surfaceOpen} onOpen={() => setSurfaceOpen(true)} onClose={closeSurface}>{selectedLifestyleCategory && selected === "lifestyle"
+    {selected && !travelling && <FinancialHud key={hudContextKey} open={surfaceOpen} onOpen={() => setSurfaceOpen(true)} onClose={closeSurface}>{selectedLifestyleCategory && selected === "lifestyle"
       ? <CategoryDetail category={selectedLifestyleCategory} currency={view.currency} period={view.period} world="Lifestyle" />
       : selectedWorldCategory && (selected === "home" || selected === "vehicle")
       ? <CategoryDetail category={selectedWorldCategory} currency={view.currency} period={view.period} world={selected === "home" ? "Home" : "Vehicle"} />
       : selectedFinancing && (selected === "home" || selected === "vehicle")
       ? <RealWorldDetail title={selected === "home" ? "Home" : "Vehicle"} heading={view[selected].financing?.displayName ?? "Financing"} object={view[selected]} currency={view.currency} manageFacts />
+      : selectedFlowGroup && selected === "cash" && !selectedAccount
+      ? <FlowGroupDetail group={selectedFlowGroup} direction={selectedCashflow === "money-in" ? "inflow" : "outflow"} currency={view.currency} />
       : selectedCashflow && selected === "cash"
       ? <CashflowChildDetail child={selectedCashflow} view={view} />
       : selectedAccount && (selected === "cash" || selected === "investments")

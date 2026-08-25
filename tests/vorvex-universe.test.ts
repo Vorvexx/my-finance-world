@@ -37,6 +37,10 @@ test("Universe exposes factual recursive Worlds and compact detail surfaces", as
   assert.match(component, /: "Unavailable"/);
   assert.match(component, /category\.label === selectedLifestyle/);
   assert.match(component, /setSelectedAccount\(account\)/);
+  assert.match(component, /const hudContextKey =/);
+  assert.match(component, /circulationChildren/);
+  assert.match(component, /circulationGroups\.length === 0 \? "receded" : "idle"/);
+  assert.match(component, /Everyday circulation/);
   assert.match(component, /selectWorld\(selected\)/);
   assert.match(component, /Around \{item\.date\}/);
   assert.match(component, /Due \{item\.date\}/);
@@ -65,11 +69,11 @@ test("Universe remains keyboard-operable, responsive, and motion-safe", async ()
 test("information surfaces close independently from spatial navigation", async () => {
   const [component, hud] = await Promise.all([readFile(componentPath, "utf8"), readFile(hudPath, "utf8")]);
   assert.match(component, /const closeSurface = \(\) => \{ setSurfaceAfterTravel\(false\); setSurfaceOpen\(false\); \}/);
-  assert.match(component, /<FinancialHud open=\{surfaceOpen\} onOpen=\{\(\) => setSurfaceOpen\(true\)\} onClose=\{closeSurface\}>/);
+  assert.match(component, /<FinancialHud key=\{hudContextKey\} open=\{surfaceOpen\} onOpen=\{\(\) => setSurfaceOpen\(true\)\} onClose=\{closeSurface\}>/);
   assert.match(hud, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);
-  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedFinancing\(false\); setSelectedCashflow\(null\); beginTravel\(true\); \}/);
+  assert.match(component, /const leaveObject = \(\) => \{ setSelectedAccount\(null\); setSelectedLifestyle\(null\); setSelectedRealWorldCategory\(null\); setSelectedFinancing\(false\); setSelectedCashflow\(null\); setSelectedFlowGroup\(null\); beginTravel\(true\); \}/);
   assert.match(component, /onClick=\{isParent \? leaveObject : \(\) => selectWorld\(world\.key\)\}/);
   assert.match(component, /aria-label=\{isParent \? `Return to \$\{world\.label\}` : undefined\}/);
 });
@@ -116,7 +120,7 @@ test("Founder acceptance removes ghost Worlds and supports in-context transactio
   assert.match(styles, /\.world-dock,\.universe-shell\[class\*="world-"\] \.world-dock/);
   assert.match(component, /InlineTransactionCorrection/);
   assert.match(component, /setSelectedLifestyle\(category\.label\); beginTravel\(true\)/);
-  assert.match(component, /selected && !travelling && <FinancialHud open=\{surfaceOpen\}/);
+  assert.match(component, /selected && !travelling && <FinancialHud key=\{hudContextKey\} open=\{surfaceOpen\}/);
 });
 
 test("Global Product Contract freezes one indivisible orb and one HUD anatomy", async () => {
@@ -127,7 +131,7 @@ test("Global Product Contract freezes one indivisible orb and one HUD anatomy", 
   assert.match(orb, /FinancialOrbSize = "compact" \| "secondary" \| "primary" \| "hero"/);
   assert.match(orb, /FinancialOrbState = "idle" \| "selected" \| "parent" \| "receded"/);
   assert.match(component, /<FinancialOrb/);
-  assert.match(component, /<FinancialHud open=\{surfaceOpen\}/);
+  assert.match(component, /<FinancialHud key=\{hudContextKey\} open=\{surfaceOpen\}/);
   assert.match(reviewForm, /<FinancialOrb/);
   assert.doesNotMatch(component, /<button[^>]+className=\{`world-node/);
   assert.doesNotMatch(component, /<button[^>]+className=\{`child-object/);

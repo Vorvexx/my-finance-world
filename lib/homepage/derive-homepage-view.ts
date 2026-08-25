@@ -259,7 +259,7 @@ export const deriveHomepageView = ({
       const included = direction === "inflow" ? cashflowInflows.includes(transaction) : cashflowOutflows.includes(transaction);
       const label = direction === "inflow"
         ? transaction.financialMeaning === "income" ? transaction.attribution.category ?? "Income"
-        : transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal" ? transaction.attribution.category ?? "Refund / Rebate"
+        : transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal" ? `Refund / Rebate${transaction.attribution.category ? ` · ${transaction.attribution.category}` : ""}`
         : transaction.financialMeaning === "transfer" ? "Transfer In"
         : transaction.financialMeaning === "credit-card-payment" ? "Card settlement"
         : "Other / Unknown"
