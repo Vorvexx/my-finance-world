@@ -71,6 +71,8 @@ export type HomepageAccount = {
     purchases: readonly HomepageActivity[];
     refunds: readonly HomepageActivity[];
     payments: readonly HomepageActivity[];
+    incomeHistory: readonly HomepageActivity[];
+    uncertainHistory: readonly HomepageActivity[];
     categoryDistribution: readonly HomepageCategoryTotal[];
     expected: readonly Extract<HomepageUpcomingObligation, { certainty: "expected" }>[];
   };
@@ -118,7 +120,13 @@ export type HomepageViewModel = {
     assets: HomepageMoney;
     liabilities: HomepageMoney;
   };
-  cash: { total: HomepageMoney; accountCount: number; accounts: readonly HomepageAccount[] };
+  cash: {
+    total: HomepageMoney;
+    accountCount: number;
+    accounts: readonly HomepageAccount[];
+    incomeHistory: readonly HomepageActivity[];
+    uncertainHistory: readonly HomepageActivity[];
+  };
   investments: { total: HomepageMoney; accountCount: number; accounts: readonly HomepageAccount[]; change: HomepageMoney; changeMessage: string };
   liabilities: { total: HomepageMoney; accountCount: number; accounts: readonly HomepageAccount[] };
   home: HomepageRealWorldObject;

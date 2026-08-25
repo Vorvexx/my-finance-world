@@ -203,6 +203,9 @@ test("uses financial meaning before category for spending and income", () => {
   assert.deepEqual(view.recentAndUpcoming.recent.map((item) => item.kind), [
     "other", "cash-movement", "transfer", "payment", "income", "refund",
   ]);
+  assert.deepEqual(view.cash.incomeHistory.map((item) => item.amount), [500]);
+  assert.deepEqual(view.cash.uncertainHistory.map((item) => item.amount), [10]);
+  assert.deepEqual(view.cash.accounts.find((account) => account.displayName === "Cash Account")?.activity.incomeHistory.map((item) => item.amount), [500]);
 });
 
 test("Lifestyle categories reconcile to eligible visible transactions", () => {

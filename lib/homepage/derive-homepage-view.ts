@@ -66,7 +66,7 @@ const accountView = (
     ? { status: "known", asOf: account.updatedAt }
     : { status: "unknown", message: "Balance date is unavailable." },
   sourceLabel: "Canonical financial snapshot",
-  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], categoryDistribution: [], expected: [] },
+  activity: { moneyIn: 0, moneyOut: 0, recent: [], purchases: [], refunds: [], payments: [], incomeHistory: [], uncertainHistory: [], categoryDistribution: [], expected: [] },
   ...(statement ? {
     statement: {
       statementDate: statement.statementDate,
@@ -130,6 +130,9 @@ export const deriveHomepageView = ({
     (transaction) => transaction.transactionDate >= startDate && transaction.transactionDate <= asOfDate,
   ) ?? [];
   const visiblePeriodTransactions = periodTransactions.filter((transaction) => !suppressedActivityTransactionIds.has(transaction.id));
+  const visibleHistoryTransactions = (transactions ?? []).filter(
+    (transaction) => transaction.transactionDate <= asOfDate && !suppressedActivityTransactionIds.has(transaction.id),
+  );
   const activityAvailable = transactions !== null;
   const periodHasActivity = periodTransactions.length > 0;
   const allDates = transactions?.filter((transaction) => transaction.transactionDate <= asOfDate).map((transaction) => transaction.transactionDate).sort() ?? [];
@@ -289,6 +292,8 @@ export const deriveHomepageView = ({
   const upcoming = [...knownUpcoming, ...expectedUpcoming].sort((left, right) => left.date.localeCompare(right.date));
   const accountActivity = (accountId: string) => {
     const accountTransactions = visiblePeriodTransactions.filter((transaction) => transaction.accountId === accountId);
+    const accountHistory = visibleHistoryTransactions.filter((transaction) => transaction.accountId === accountId)
+      .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate));
     const accountCategories = new Map<string, number>();
     for (const transaction of accountTransactions.filter((item) => SPENDING.has(item.financialMeaning) && item.attribution.category)) {
       accountCategories.set(transaction.attribution.category!, (accountCategories.get(transaction.attribution.category!) ?? 0) + cents(transaction.amount));
@@ -302,6 +307,10 @@ export const deriveHomepageView = ({
       purchases: select((transaction) => transaction.financialMeaning === "credit-card-purchase", "account-purchase"),
       refunds: select((transaction) => transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal", "account-refund"),
       payments: select((transaction) => transaction.financialMeaning === "credit-card-payment", "account-payment"),
+      incomeHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "income").slice(0, 12)
+        .map((transaction, index) => activityView(transaction, `account-income-history-${index + 1}`)),
+      uncertainHistory: accountHistory.filter((transaction) => transaction.financialMeaning === "unknown").slice(0, 12)
+        .map((transaction, index) => activityView(transaction, `account-uncertain-history-${index + 1}`)),
       categoryDistribution: [...accountCategories.entries()].sort((left, right) => right[1] - left[1]).slice(0, 5).map(([category, amount]) => ({ category, amount: fromCents(amount) })),
       expected: expectedUpcoming.filter((_, index) => recurringPatterns[index]?.accountId === accountId),
     };
@@ -385,6 +394,12 @@ export const deriveHomepageView = ({
         ...liabilityAccounts.filter((account) => accountType(account.name, "liabilities") === "Credit card")
           .map((account, index) => ({ ...accountView(account, "liabilities", index, latestStatementByAccount.get(account.id)), activity: accountActivity(account.id) })),
       ],
+      incomeHistory: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "income")
+        .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
+        .map((transaction, index) => activityView(transaction, `cash-income-history-${index + 1}`)),
+      uncertainHistory: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "unknown")
+        .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
+        .map((transaction, index) => activityView(transaction, `cash-uncertain-history-${index + 1}`)),
     },
     investments: {
       total: positionAvailable && model.totalsByWorld.investments !== null ? money(model.totalsByWorld.investments) : unknown("Investment balance is unavailable."),

@@ -474,7 +474,7 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
   --vx-safe-header:112px;
   --vx-safe-footer:38px;
   --vx-hud-reserve:218px;
-  --vx-hud-width:min(1180px,calc(100vw - 48px));
+  --vx-hud-width:calc(100vw - 48px);
   --vx-hud-bottom:34px;
   --vx-hud-radius:24px;
   --vx-hud-padding:18px 24px;
@@ -571,6 +571,13 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
 .account-transaction-groups h3 { margin-bottom:6px; font-size:var(--vx-type-hud-eyebrow); color:#9fb0c5 }
 .inline-correction-wrap { display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap }.transaction-undo { color:#a9bad0; font-size:.68rem; text-decoration:underline }
 .financial-hud>.financial-hud__close { position:absolute; z-index:100; top:12px; right:14px; }
+.financial-hud__expand { position:absolute; z-index:100; top:12px; right:52px; padding:6px 11px; border:1px solid rgba(255,255,255,.12); border-radius:999px; color:#b7c8dc; background:rgba(4,10,22,.72); font-size:var(--vx-type-hud-secondary); cursor:pointer; }
+.financial-hud__expanded-evidence { display:none; }
+.financial-hud[data-expanded],.universe-shell[class*="world-"] .financial-hud[data-expanded] { max-height:min(68vh,620px); }
+.financial-hud[data-expanded] .financial-hud__content { max-height:min(calc(68vh - 38px),580px); overflow:auto; padding-top:28px; }
+.financial-hud[data-expanded] .pnn-grid>section { max-height:none; overflow:visible; }
+.financial-hud[data-expanded] .activity-stream li:nth-child(n+4),.financial-hud[data-expanded] .pnn-grid section>span:nth-of-type(n+4) { display:flex; }
+.financial-hud[data-expanded] .financial-hud__expanded-evidence { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
 
 .financial-intelligence { position:fixed; z-index:18; top:136px; right:28px; width:238px; max-height:210px; padding:15px 17px; overflow:auto; border:1px solid rgba(170,202,255,.12); border-radius:18px; background:linear-gradient(165deg,rgba(11,18,38,.7),rgba(4,9,21,.82)); backdrop-filter:blur(18px); animation:financial-hud-arrive .32s .15s var(--vx-motion-ease) both; }
 .financial-intelligence section { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.07) }.financial-intelligence strong,.financial-intelligence small { display:block }.financial-intelligence strong { font-size:var(--vx-type-hud-primary) }.financial-intelligence small { margin-top:4px; color:#94a3b8; font-size:var(--vx-type-hud-secondary); line-height:1.4 }.financial-intelligence .assistant-reserve { display:none }
@@ -595,6 +602,7 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
   .financial-orb--secondary { --orb-diameter:62px; min-width:96px }
   .financial-orb>.financial-orb__name { max-width:112px; font-size:.75rem }.financial-orb>.financial-orb__value { max-width:112px; font-size:.67rem }
   .financial-hud,.universe-shell[class*="world-"] .financial-hud { min-width:0; max-height:166px; padding:14px 16px }
+  .financial-hud[data-expanded],.universe-shell[class*="world-"] .financial-hud[data-expanded] { max-height:72vh; }
   .financial-intelligence { display:none }
 }
 @media (max-width:620px) {
@@ -611,6 +619,7 @@ body:has(.universe-shell) { height:100svh; overflow:hidden; }
   .financial-orb--hero { --orb-diameter:96px; min-width:150px }.financial-orb--primary { --orb-diameter:82px }.financial-orb--secondary { --orb-diameter:52px; min-width:88px }
   .financial-orb>.financial-orb__name { max-width:132px; font-size:.75rem }.financial-orb>.financial-orb__value { max-width:132px; font-size:.67rem }
   .financial-hud,.universe-shell[class*="world-"] .financial-hud { max-height:132px; padding:12px 18px }.financial-hud__content { max-height:104px }.financial-hud .pnn-grid>section { max-height:94px }
+  .financial-hud[data-expanded],.universe-shell[class*="world-"] .financial-hud[data-expanded] { max-height:72vh; }.financial-hud[data-expanded] .financial-hud__content { max-height:calc(72vh - 34px); }.financial-hud[data-expanded] .pnn-grid>section { max-height:none; }
 }
 @media (prefers-reduced-motion:reduce) {
   .financial-scene * { animation:none!important; transition-duration:.01ms!important }
