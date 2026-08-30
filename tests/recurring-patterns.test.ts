@@ -31,6 +31,15 @@ test("does not promote sparse, irregular, transfer, or pending activity", () => 
   assert.deepEqual(detectRecurringPatterns([...irregular, transfer, pending], "2099-07-20"), []);
 });
 
+test("historical recurring analysis never uses future evidence", () => {
+  const history = [
+    recurring(1, "2099-01-01"), recurring(2, "2099-01-15"),
+    recurring(3, "2099-02-01"), recurring(4, "2099-02-15"), recurring(5, "2099-03-01"),
+  ];
+  assert.deepEqual(detectRecurringPatterns(history, "2099-01-31"), []);
+  assert.equal(detectRecurringPatterns(history, "2099-03-02").length, 1);
+});
+
 test("surfaces a missing fee rebate only after repeated matched evidence", () => {
   const fee = (index: number, date: string) => ({ ...recurring(index, date, 15), direction: "outflow" as const, financialMeaning: "fee" as const, rawDescription: "Monthly account fee", normalizedCounterparty: "MONTHLY ACCOUNT FEE", attribution: { ...recurring(index, date).attribution, world: "cash" as const, category: "Banking Fees" } });
   const rebate = (index: number, date: string) => ({ ...recurring(index, date, 15), financialMeaning: "refund" as const, rawDescription: "Monthly fee rebate", normalizedCounterparty: "MONTHLY FEE REBATE", attribution: { ...recurring(index, date).attribution, world: "cash" as const, category: "Banking Fees" } });

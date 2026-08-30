@@ -37,7 +37,7 @@ export const detectRecurringPatterns = (
   transactions: readonly CanonicalTransaction[],
   asOfDate: string,
 ): readonly RecurringPattern[] => {
-  const eligible = transactions.filter((transaction) => transaction.status === "posted"
+  const eligible = transactions.filter((transaction) => transaction.transactionDate <= asOfDate && transaction.status === "posted"
     && ["income", "expense", "fee", "interest", "credit-card-purchase", "credit-card-payment"].includes(transaction.financialMeaning));
   const groups = new Map<string, CanonicalTransaction[]>();
   for (const transaction of eligible) {
@@ -86,10 +86,10 @@ export const detectMissingExpectedEvents = (
   transactions: readonly CanonicalTransaction[],
   asOfDate: string,
 ): readonly MissingExpectedEvent[] => {
-  const bankingFees = transactions.filter((transaction) => transaction.direction === "outflow"
+  const bankingFees = transactions.filter((transaction) => transaction.transactionDate <= asOfDate && transaction.direction === "outflow"
     && transaction.financialMeaning === "fee" && /^(?:bank|banking) fees$/i.test(transaction.attribution.category ?? ""))
     .sort((left, right) => left.transactionDate.localeCompare(right.transactionDate));
-  const rebates = transactions.filter((transaction) => transaction.direction === "inflow"
+  const rebates = transactions.filter((transaction) => transaction.transactionDate <= asOfDate && transaction.direction === "inflow"
     && (transaction.financialMeaning === "refund" || transaction.financialMeaning === "reversal")
     && /^(?:bank|banking) fees$/i.test(transaction.attribution.category ?? ""));
   if (bankingFees.length < 3 || rebates.length < 3) return [];
