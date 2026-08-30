@@ -631,6 +631,15 @@ export class LocalIngestionStore {
   }
 
   markFileDuplicate(record: ImportJournalRecord, timestamp: string): DurableImportReceipt {
+    const committed = this.findCommittedFileDuplicate(record);
+    if (committed) {
+      return {
+        ...receiptFromImport(committed),
+        status: "duplicate",
+        transactionCount: 0,
+        duplicateCount: record.parsedTransactionCount,
+      };
+    }
     const current = this.createReceivedImport(record);
     if (current.status === "duplicate") return receiptFromImport(current);
     if (current.status !== "received") throw new LocalIngestionError("IMPORT_INVALID_STATE");

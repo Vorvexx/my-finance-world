@@ -188,6 +188,7 @@ test("marks renamed identical bytes as a file duplicate and does not reinsert", 
     assert.equal(duplicate.duplicateCount, 5);
     assert.equal(duplicate.safeToDeleteSource, true);
     assert.equal(store.getTransactionCount(), 5);
+    assert.equal(store.getImportHistory().length, 1);
   } finally {
     store.close();
   }
