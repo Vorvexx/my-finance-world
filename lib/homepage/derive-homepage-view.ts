@@ -6,7 +6,6 @@ import type { HomepageAccount, HomepageActivity, HomepageMoney, HomepageViewMode
 import type { CanonicalTransaction, FinancialMeaning } from "../../types/transactions.ts";
 import {
   affectsLifestyle,
-  isPrimaryInflow,
   isPrimaryOutflow,
   isPrimaryOutflowMeaning,
   isRefund,
@@ -15,6 +14,7 @@ import {
   summarizeCashFlow,
   summarizeSpending,
 } from "../analytics/financial-analytics.ts";
+import { economicMeaningFor } from "../financial-model/economic-semantics.ts";
 import { buildHistoricalFinancialFlow } from "../analytics/monthly-financial-flow.ts";
 import { resolveFinancialPeriod, type FinancialPeriodKey } from "./financial-period.ts";
 import { detectMissingExpectedEvents, detectRecurringPatterns } from "./recurring-patterns.ts";
@@ -249,7 +249,7 @@ export const deriveHomepageView = ({
     .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate) || right.postedDate?.localeCompare(left.postedDate ?? "") || 0)
     .slice(0, 6)
     .map((transaction, index) => activityView(transaction, `recent-${index + 1}`));
-  const cashflowInflows = visiblePeriodTransactions.filter(isPrimaryInflow);
+  const cashflowInflows = visiblePeriodTransactions.filter((transaction) => economicMeaningFor(transaction) === "income" || economicMeaningFor(transaction) === "gift-received");
   const cashflowOutflows = visiblePeriodTransactions.filter(isPrimaryOutflow);
   const flowGroup = (items: readonly CanonicalTransaction[], direction: "inflow" | "outflow") => {
     const grouped = new Map<string, { label: string; included: boolean; transactions: CanonicalTransaction[] }>();
@@ -287,7 +287,7 @@ export const deriveHomepageView = ({
   for (const transaction of visiblePeriodTransactions) {
     const month = transaction.transactionDate.slice(0, 7);
     const bucket = monthlyMovement.get(month) ?? { moneyIn: 0, moneyOut: 0, lifestyleSpending: 0 };
-    if (isPrimaryInflow(transaction)) bucket.moneyIn += cents(transaction.amount);
+    if (economicMeaningFor(transaction) === "income" || economicMeaningFor(transaction) === "gift-received") bucket.moneyIn += cents(transaction.amount);
     if (isPrimaryOutflow(transaction)) {
       bucket.moneyOut += cents(transaction.amount);
       if (affectsLifestyle(transaction)) bucket.lifestyleSpending += cents(transaction.amount);
@@ -521,7 +521,7 @@ export const deriveHomepageView = ({
     cashflow: {
       moneyIn: periodHasEvidence ? money(fromCents(cashflowInCents)) : unknown("No recorded activity establishes this selected period."),
       moneyOut: periodHasEvidence ? money(fromCents(cashflowOutCents)) : unknown("No recorded activity establishes this selected period."),
-      net: periodHasEvidence ? money(fromCents(cashflowInCents - cashflowOutCents)) : unknown("No recorded activity establishes this selected period."),
+      net: periodHasEvidence ? money(cashFlowAnalytics.net) : unknown("No recorded activity establishes this selected period."),
       topInflows: rankedMovements.inflows.map((transaction, index) => activityView(transaction, `cashflow-in-${index + 1}`, "inflow")),
       topOutflows: rankedMovements.outflows.map((transaction, index) => activityView(transaction, `cashflow-out-${index + 1}`, "outflow")),
       inflowGroups: flowGroup(visiblePeriodTransactions.filter((transaction) => transaction.direction === "inflow"), "inflow"),

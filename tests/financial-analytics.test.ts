@@ -14,6 +14,7 @@ import type { ImportJournalRecord } from "../types/imports.ts";
 import type { CanonicalInvestmentSnapshot } from "../types/investments.ts";
 import type { CanonicalTransaction, FinancialMeaning } from "../types/transactions.ts";
 import { buildHistoricalFinancialFlow, emergencyFundTarget, validateGoalIntentions } from "../lib/analytics/monthly-financial-flow.ts";
+import { projectEconomicSemantics, validateTransactionSplits } from "../lib/financial-model/economic-semantics.ts";
 
 const transaction = ({ id, date, amount, direction = "outflow", meaning, category = null, world = null, accountId = "cash", counterparty = id }: {
   id: string; date: string; amount: number; direction?: "inflow" | "outflow"; meaning: FinancialMeaning;
@@ -37,7 +38,7 @@ test("canonical cash-flow analytics separate economic activity from circulation"
     transaction({ id: "transfer", date: "2026-08-05", amount: 500, meaning: "transfer", world: "investments" }),
   ];
   assert.deepEqual(summarizeCashFlow(transactions, range), {
-    transactionCount: 5, moneyIn: 3050, moneyOut: 200, net: 2850,
+    transactionCount: 5, moneyIn: 3000, moneyOut: 200, net: 2850,
     circulationIn: 3050, circulationOut: 1700, transfers: 500, creditCardPayments: 1000, cashMovements: 0,
   });
   assert.deepEqual(summarizeSpending(transactions, range), {
@@ -122,6 +123,9 @@ test("monthly financial flow is historical, coverage-aware, reconciled, and futu
   assert.equal(timeline.months[0].creditCardSettlements, 800);
   assert.equal(timeline.months[0].requiredCostComponents[0].evidenceCount, 3);
   assert.equal(timeline.months[0].requiredCostComponents[0].supportingTransactions.some((item) => item.date > "2024-12-31"), false);
+  assert.equal(timeline.months[0].requiredCostCoverage.normalizationSufficient, true);
+  assert.equal(timeline.months[1].requiredCostCoverage.normalizationSufficient, false);
+  assert.equal(timeline.months[1].requiredCostCoverage.normalizedMonthlyAmount, null);
   assert.equal(timeline.months[1].byWorld.find((item) => item.key === "Home")?.amount, 1200);
   assert.equal(timeline.months[1].byWorld.find((item) => item.key === "Home")?.categories.reduce((sum, item) => sum + Math.round(item.amount * 100), 0), 120000);
   assert.equal(timeline.months[1].fees, 0);
@@ -143,4 +147,46 @@ test("goal intentions remain metadata and require an explicit emergency-fund hor
   ], new Map([["cash", 5000]])).valid, true);
   assert.equal(emergencyFundTarget(6, 1250), 7500);
   assert.equal(emergencyFundTarget(0, 1250), null);
+});
+
+test("canonical economic semantics reconstruct life activity without direction or payment double counting", () => {
+  const items = [
+    transaction({ id: "its-pay", date: "2026-07-01", amount: 5000, direction: "inflow", meaning: "income", category: "Employment Income", world: "income", counterparty: "ITS PAY" }),
+    transaction({ id: "zown", date: "2026-07-02", amount: 6050, direction: "inflow", meaning: "refund", category: "Rebate/Cashback", world: "home", counterparty: "Zown Realty" }),
+    transaction({ id: "dinner", date: "2026-07-03", amount: 300, meaning: "expense", category: "Dining", world: "cash" }),
+    transaction({ id: "friends", date: "2026-07-04", amount: 220, direction: "inflow", meaning: "reimbursement", category: "Dining", world: "cash" }),
+    transaction({ id: "card-buy", date: "2026-07-05", amount: 100, meaning: "credit-card-purchase", category: "Groceries", world: "cash", accountId: "card" }),
+    transaction({ id: "card-pay", date: "2026-07-06", amount: 100, meaning: "credit-card-payment", world: "creditDebt" }),
+    transaction({ id: "tfsa-in", date: "2026-07-07", amount: 500, meaning: "transfer", category: "Contribution", world: "investments" }),
+    transaction({ id: "tfsa-out", date: "2026-07-08", amount: 200, direction: "inflow", meaning: "transfer", category: "Withdrawal", world: "investments" }),
+    transaction({ id: "atm", date: "2026-07-09", amount: 60, meaning: "cash-withdrawal", world: "cash" }),
+    transaction({ id: "fee", date: "2026-07-10", amount: 30.95, meaning: "fee", category: "Banking Fees", world: "cash" }),
+    transaction({ id: "fee-rebate", date: "2026-07-11", amount: 30.95, direction: "inflow", meaning: "refund", category: "Banking Fees", world: "cash" }),
+    transaction({ id: "mortgage", date: "2026-07-12", amount: 1000, meaning: "expense", category: "Mortgage", world: "home" }),
+    transaction({ id: "mystery-in", date: "2026-07-13", amount: 50, direction: "inflow", meaning: "unknown" }),
+    transaction({ id: "mystery-out", date: "2026-07-14", amount: 40, meaning: "unknown" }),
+  ];
+  const semantics = Object.fromEntries(items.map((item) => [item.id, projectEconomicSemantics(item).economicMeaning]));
+  assert.equal(semantics["its-pay"], "income");
+  assert.equal(semantics.zown, "refund-rebate");
+  assert.equal(semantics["card-pay"], "credit-card-settlement");
+  assert.equal(semantics["tfsa-in"], "wealth-building");
+  assert.equal(semantics["tfsa-out"], "investment-withdrawal");
+  assert.equal(semantics.atm, "transfer");
+  assert.equal(semantics["mystery-in"], "unknown-incoming");
+  assert.equal(semantics["mystery-out"], "unknown-outgoing");
+  assert.equal(projectEconomicSemantics(items.find((item) => item.id === "mortgage")!).costNature, "required-variable");
+
+  const imported: ImportJournalRecord = { importId: "coverage", sourceSha256: "coverage", providerId: "td", accountType: "chequing", accountId: "cash", parserVersion: "v1", statementPeriodStart: "2026-07-01", statementPeriodEnd: "2026-07-31", sourceFormat: "pdf", receivedAt: "2026-08-01T00:00:00Z", processingStartedAt: null, proposedAt: null, committedAt: "2026-08-01T00:00:00Z", status: "committed", parsedTransactionCount: items.length, committedTransactionCount: items.length, duplicateTransactionCount: 0, safeErrorCode: null, schemaVersion: 1 };
+  const july = buildHistoricalFinancialFlow({ transactions: items, imports: [imported], investmentSnapshots: [], accountNames: new Map([["cash", "Cash"], ["card", "Card"]]), genuinelyUnknownIds: new Set(["mystery-in", "mystery-out"]), startMonth: "2026-07", endDate: "2026-07-31" }).months[0];
+  assert.equal(july.moneyIn, 5000);
+  assert.equal(july.observedRequiredCosts, 1000);
+  assert.equal(july.verifiedWealthAllocation.amount, 500);
+  assert.equal(july.creditCardSettlements, 100);
+  assert.equal(july.transfers, 700);
+  assert.equal(july.fees, 0);
+  assert.equal(july.unknownPartial.count, 2);
+  assert.equal(july.byWorld.every((world) => world.categories.reduce((sum, category) => sum + Math.round(category.amount * 100), 0) === Math.round(world.amount * 100)), true);
+  const source = items.find((item) => item.id === "card-buy")!;
+  assert.equal(validateTransactionSplits(source, [{ id: "one", sourceTransactionId: source.id, amountCents: 6000, world: "cash", category: "Groceries", economicMeaning: "consumption", costNature: "required-variable" }, { id: "two", sourceTransactionId: source.id, amountCents: 4000, world: "cash", category: "Shopping", economicMeaning: "consumption", costNature: "discretionary-variable" }]), true);
 });

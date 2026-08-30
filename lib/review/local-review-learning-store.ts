@@ -32,6 +32,8 @@ const WORLDS = new Set<MoneyWorldKey>(["cash", "investments", "home", "vehicle",
 const MEANINGS = new Set<FinancialMeaning>([
   "expense", "income", "refund", "reversal", "fee", "interest", "credit-card-purchase",
   "credit-card-payment", "transfer", "cash-withdrawal", "cash-deposit", "unknown",
+  "wealth-building", "liability-reduction", "investment-withdrawal", "reimbursement", "gift-given", "gift-received",
+  "money-lent", "receivable-repayment", "asset-liquidation", "unknown-incoming", "unknown-outgoing",
 ]);
 const RULE_SOURCES = new Set<LearningRuleSource>(["user-created", "user-confirmed-learned"]);
 const DECISIONS = new Set<ReviewDecision["kind"]>(["classify", "confirm-relationship", "ignore", "keep-unknown"]);
@@ -163,6 +165,11 @@ export class LocalReviewLearningStore {
       id: String(row.alias_id), createdAt: String(row.created_at), updatedAt: String(row.updated_at),
       ...decryptJsonPayload<AliasPayload>(String(row.encrypted_payload), this.#key),
     }));
+  }
+
+  auditCounts() {
+    const count = (table: "review_decisions" | "learning_rules" | "language_aliases") => Number(this.#database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count ?? 0);
+    return { decisions: count("review_decisions"), rules: count("learning_rules"), aliases: count("language_aliases") };
   }
 
   createLanguageAlias(phrase: string, classification: RuleClassification, createdAt: string) {

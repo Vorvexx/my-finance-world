@@ -10,6 +10,8 @@ const WORLD_NAMES: Record<MoneyWorldKey, string> = { cash: "Lifestyle", investme
 const MEANINGS = new Set<FinancialMeaning>([
   "expense", "income", "refund", "reversal", "fee", "interest", "credit-card-purchase",
   "credit-card-payment", "transfer", "cash-withdrawal", "cash-deposit", "unknown",
+  "wealth-building", "liability-reduction", "investment-withdrawal", "reimbursement", "gift-given", "gift-received",
+  "money-lent", "receivable-repayment", "asset-liquidation", "unknown-incoming", "unknown-outgoing",
 ]);
 const TOKEN_TTL_MS = 30 * 60 * 1000;
 const CONCEPTS: ReadonlyArray<Omit<BrowserReviewSuggestion, "reason" | "searchTerms" | "recommended"> & { terms: string; directions?: readonly CanonicalTransaction["direction"][] }> = [

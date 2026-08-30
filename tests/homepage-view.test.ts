@@ -193,15 +193,15 @@ test("uses financial meaning before category for spending and income", () => {
   const view = deriveHomepageView({ model, transactions, statementFacts: [], asOfDate: "2099-08-08" });
   assert.deepEqual(view.lifestyle.qualifyingSpending, { status: "known", amount: 130 });
   assert.deepEqual(view.inflows.qualifyingIncome, { status: "known", amount: 500 });
-  assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 520 });
+  assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 500 });
   assert.deepEqual(view.cashflow.moneyOut, { status: "known", amount: 150 });
   assert.deepEqual(view.cashflow.net, { status: "known", amount: 370 });
   assert.deepEqual(view.cashflow.topInflows.map((item) => item.amount), [500, 20]);
   assert.deepEqual(view.cashflow.topOutflows.map((item) => item.amount), [100, 50]);
   assert.deepEqual(view.cashflow.inflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
     { label: "Income", total: 500, includedInPrimaryTotal: true },
-    { label: "Refund / Rebate · Dining", total: 20, includedInPrimaryTotal: true },
     { label: "Card settlement", total: 200, includedInPrimaryTotal: false },
+    { label: "Refund / Rebate · Dining", total: 20, includedInPrimaryTotal: false },
   ]);
   assert.deepEqual(view.cashflow.outflowGroups.map(({ label, total, includedInPrimaryTotal }) => ({ label, total, includedInPrimaryTotal })), [
     { label: "Lifestyle", total: 150, includedInPrimaryTotal: true },
@@ -284,7 +284,7 @@ test("bank fees remain Cashflow activity but never inflate Lifestyle", () => {
   ];
   const view = deriveHomepageView({ model, transactions, statementFacts: [], asOfDate: "2099-08-08" });
   assert.deepEqual(view.cashflow.moneyOut, { status: "known", amount: 55 });
-  assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 15 });
+  assert.deepEqual(view.cashflow.moneyIn, { status: "known", amount: 0 });
   assert.deepEqual(view.lifestyle.qualifyingSpending, { status: "known", amount: 40 });
   assert.equal(view.lifestyle.categories.some((category) => category.label === "Banking Fees"), false);
 });

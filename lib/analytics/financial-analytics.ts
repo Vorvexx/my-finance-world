@@ -2,14 +2,13 @@ import type { MoneyWorldKey } from "../../types/finance.ts";
 import type { ImportJournalRecord } from "../../types/imports.ts";
 import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
 import type { CanonicalTransaction, FinancialMeaning } from "../../types/transactions.ts";
+import { economicMeaningFor } from "../financial-model/economic-semantics.ts";
 
 export type DateRange = { startDate: string; endDate: string };
 export type AmountBreakdown = { key: string; amount: number; transactionCount: number };
 
-const PRIMARY_INFLOW = new Set<FinancialMeaning>(["income", "refund", "reversal"]);
-const PRIMARY_OUTFLOW = new Set<FinancialMeaning>(["expense", "fee", "interest", "credit-card-purchase"]);
-const REFUNDS = new Set<FinancialMeaning>(["refund", "reversal"]);
-const MOVEMENTS = new Set<FinancialMeaning>(["transfer", "credit-card-payment", "cash-withdrawal", "cash-deposit"]);
+const PRIMARY_INFLOW = new Set<FinancialMeaning>(["income", "gift-received", "refund", "reversal", "reimbursement"]);
+const PRIMARY_OUTFLOW = new Set<FinancialMeaning>(["expense", "fee", "interest", "credit-card-purchase", "gift-given"]);
 const NON_LIFESTYLE_WORLDS = new Set<MoneyWorldKey>(["home", "vehicle", "investments", "creditDebt"]);
 const cents = (value: number) => Math.round(value * 100);
 const amount = (value: number) => value / 100;
@@ -20,12 +19,12 @@ const addDays = (date: string, days: number) => {
   return parsed.toISOString().slice(0, 10);
 };
 
-export const isPrimaryInflow = (transaction: CanonicalTransaction) => PRIMARY_INFLOW.has(transaction.financialMeaning);
-export const isPrimaryOutflow = (transaction: CanonicalTransaction) => PRIMARY_OUTFLOW.has(transaction.financialMeaning);
+export const isPrimaryInflow = (transaction: CanonicalTransaction) => ["income", "gift-received", "refund-rebate", "reimbursement"].includes(economicMeaningFor(transaction));
+export const isPrimaryOutflow = (transaction: CanonicalTransaction) => ["consumption", "gift-given", "financial-fee", "financial-interest-cost"].includes(economicMeaningFor(transaction));
 export const isPrimaryInflowMeaning = (meaning: FinancialMeaning) => PRIMARY_INFLOW.has(meaning);
 export const isPrimaryOutflowMeaning = (meaning: FinancialMeaning) => PRIMARY_OUTFLOW.has(meaning);
-export const isRefund = (transaction: CanonicalTransaction) => REFUNDS.has(transaction.financialMeaning);
-export const isInternalMovement = (transaction: CanonicalTransaction) => MOVEMENTS.has(transaction.financialMeaning);
+export const isRefund = (transaction: CanonicalTransaction) => economicMeaningFor(transaction) === "refund-rebate" || economicMeaningFor(transaction) === "reimbursement";
+export const isInternalMovement = (transaction: CanonicalTransaction) => ["transfer", "credit-card-settlement", "wealth-building", "liability-reduction", "investment-withdrawal", "money-lent", "receivable-repayment", "asset-liquidation"].includes(economicMeaningFor(transaction));
 export const isBankingFee = (transaction: CanonicalTransaction) => transaction.financialMeaning === "fee"
   || transaction.financialMeaning === "interest"
   || /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? "");
@@ -39,17 +38,18 @@ export const transactionsInRange = (transactions: readonly CanonicalTransaction[
 
 export const summarizeCashFlow = (transactions: readonly CanonicalTransaction[], range: DateRange) => {
   const period = transactionsInRange(transactions, range);
-  const primaryInflows = period.filter(isPrimaryInflow);
+  const primaryInflows = period.filter((transaction) => economicMeaningFor(transaction) === "income" || economicMeaningFor(transaction) === "gift-received");
   const primaryOutflows = period.filter(isPrimaryOutflow);
   const circulationInflows = period.filter((transaction) => transaction.direction === "inflow");
   const circulationOutflows = period.filter((transaction) => transaction.direction === "outflow");
   const moneyIn = sum(primaryInflows);
   const moneyOut = sum(primaryOutflows);
+  const refundAmount = sum(period.filter(isRefund));
   return {
     transactionCount: period.length,
     moneyIn,
     moneyOut,
-    net: amount(cents(moneyIn) - cents(moneyOut)),
+    net: amount(cents(moneyIn) - cents(moneyOut) + cents(refundAmount)),
     circulationIn: sum(circulationInflows),
     circulationOut: sum(circulationOutflows),
     transfers: sum(period.filter((transaction) => transaction.financialMeaning === "transfer")),

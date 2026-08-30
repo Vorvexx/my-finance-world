@@ -28,6 +28,17 @@ const FINANCIAL_MEANINGS = new Set<FinancialMeaning>([
   "transfer",
   "cash-withdrawal",
   "cash-deposit",
+  "wealth-building",
+  "liability-reduction",
+  "investment-withdrawal",
+  "reimbursement",
+  "gift-given",
+  "gift-received",
+  "money-lent",
+  "receivable-repayment",
+  "asset-liquidation",
+  "unknown-incoming",
+  "unknown-outgoing",
   "unknown",
 ]);
 

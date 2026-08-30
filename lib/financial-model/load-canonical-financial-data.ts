@@ -22,6 +22,7 @@ export const loadCanonicalFinancialData = async (evaluatedAt = new Date()) => {
     corrections: service.correctionsForTransactions(relationships.transactions),
     understanding: service.understandingState(evaluatedAt, relationships.transactions),
   })) : null;
+  const reviewCounts = relationships ? withReviewRuntime(({ store }) => store.auditCounts()) ?? null : null;
   return {
     model,
     transactions: relationships?.transactions ?? null,
@@ -34,5 +35,6 @@ export const loadCanonicalFinancialData = async (evaluatedAt = new Date()) => {
     genuinelyUnknownTransactionIds: review?.understanding.genuinelyUnknownTransactionIds,
     intentionallyDeferredTransactionIds: review?.understanding.intentionallyDeferredTransactionIds ?? new Set<string>(),
     accountNames: new Map(model.money.accounts.map((account) => [account.id, account.name])),
+    reviewCounts,
   };
 };

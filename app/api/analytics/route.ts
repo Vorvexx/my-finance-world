@@ -6,13 +6,26 @@ import { loadCanonicalFinancialData } from "@/lib/financial-model/load-canonical
 export async function GET() {
   await connection();
   const data = await loadCanonicalFinancialData();
-  if (!data.visibleTransactions || !data.imports || !data.investmentSnapshots) {
+  if (!data.transactions || !data.visibleTransactions || !data.imports || !data.investmentSnapshots) {
     return NextResponse.json({ status: "unavailable", message: "Canonical analytics are unavailable on this device." }, { status: 503 });
   }
   const latestDate = data.visibleTransactions.reduce<string | null>((latest, transaction) => !latest || transaction.transactionDate > latest ? transaction.transactionDate : latest, null);
   if (!latestDate) return NextResponse.json({ status: "unavailable", message: "No canonical transaction evidence is available." }, { status: 503 });
   return NextResponse.json({
     status: "ready",
+    currentPicture: {
+      transactionCount: data.transactions.length,
+      visibleTransactionCount: data.visibleTransactions.length,
+      accountCount: data.model.money.accounts.length,
+      decisionCount: data.reviewCounts?.decisions ?? null,
+      ruleCount: data.reviewCounts?.rules ?? null,
+      aliasCount: data.reviewCounts?.aliases ?? null,
+      genuinelyUnknownCount: data.genuinelyUnknownTransactionIds?.size ?? null,
+      intentionallyDeferredCount: data.intentionallyDeferredTransactionIds.size,
+      investmentSnapshotCount: data.investmentSnapshots.length,
+      availableCash: data.model.totalsByWorld.cash === null ? { status: "unknown", amount: null } : { status: "known", amount: data.model.totalsByWorld.cash },
+      netWorth: data.model.summary === null ? { status: "unknown", amount: null } : { status: "known", amount: data.model.summary.netWorth },
+    },
     timeline: buildHistoricalFinancialFlow({
       transactions: data.visibleTransactions,
       imports: data.imports,

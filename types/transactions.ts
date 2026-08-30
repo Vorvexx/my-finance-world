@@ -16,6 +16,17 @@ export type FinancialMeaning =
   | "transfer"
   | "cash-withdrawal"
   | "cash-deposit"
+  | "wealth-building"
+  | "liability-reduction"
+  | "investment-withdrawal"
+  | "reimbursement"
+  | "gift-given"
+  | "gift-received"
+  | "money-lent"
+  | "receivable-repayment"
+  | "asset-liquidation"
+  | "unknown-incoming"
+  | "unknown-outgoing"
   | "unknown";
 
 export type TransactionFingerprint = {
