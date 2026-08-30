@@ -84,6 +84,21 @@ test("a confirmed classification creates a narrow account-scoped learned rule", 
   } finally { await context.cleanup(); }
 });
 
+test("a one-off exact classification preserves a linked audit decision without creating a merchant rule", async () => {
+  const context = await fixture();
+  try {
+    const source = transaction({ id: "cash-out", counterparty: "CASH WITHDRAWAL" });
+    const review = context.store.evaluateTransaction(source, NOW);
+    context.store.resolveExactClassification(review.reviewItemId!, { financialMeaning: "transfer", category: "Physical Cash", world: "cash" }, NOW, "cash-in");
+    assert.equal(context.store.listRules().length, 0);
+    const decision = context.store.reviewDecision(review.reviewItemId!);
+    assert.equal(decision?.relatedTransactionId, "cash-in");
+    const resolved = context.store.evaluateTransaction(source, "2099-08-10T00:00:00.000Z");
+    assert.equal(resolved.financialMeaning, "transfer");
+    assert.equal(resolved.category, "Physical Cash");
+  } finally { await context.cleanup(); }
+});
+
 test("enforces correction, user-created, learned, deterministic, Unknown precedence", async () => {
   const context = await fixture();
   try {

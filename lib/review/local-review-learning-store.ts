@@ -468,6 +468,23 @@ export class LocalReviewLearningStore {
     }
   }
 
+  resolveExactClassification(reviewId: string, classification: RuleClassification, decidedAt: string, relatedTransactionId: string | null = null) {
+    assertTimestamp(decidedAt); assertClassification(classification);
+    const row = this.#database.prepare("SELECT * FROM review_items WHERE review_id = ?").get(reviewId) as SqlRow | undefined;
+    if (!row) throw new ReviewLearningError("REVIEW_NOT_FOUND");
+    const item = this.#reviewFromRow(row);
+    if (item.status !== "pending" || (relatedTransactionId !== null && (!relatedTransactionId.trim() || relatedTransactionId === item.transactionId))) throw new ReviewLearningError("REVIEW_INVALID");
+    const decision: DecisionPayload = { kind: "classify", ...classification, relatedTransactionId, learnedRuleId: null, learnedAliasId: null, previousAlias: null };
+    this.#database.exec("BEGIN IMMEDIATE");
+    try {
+      this.#database.prepare("INSERT INTO review_decisions VALUES (?, ?, ?, 'classify', ?, ?)")
+        .run(`review-decision:${randomUUID()}`, reviewId, item.transactionId, encryptJsonPayload(decision, this.#key), decidedAt);
+      this.#database.prepare("UPDATE review_items SET status = 'resolved', updated_at = ? WHERE review_id = ?").run(decidedAt, reviewId);
+      this.#database.exec("COMMIT");
+      return { status: "resolved" as const, learnedRuleId: null };
+    } catch { this.#database.exec("ROLLBACK"); throw new ReviewLearningError("REVIEW_PERSISTENCE_FAILED"); }
+  }
+
   resolveReviewGroup(reviewIds: readonly string[], decision: ReviewDecision, decidedAt: string, userPhrase: string | null = null) {
     assertTimestamp(decidedAt);
     const uniqueIds = [...new Set(reviewIds)];
