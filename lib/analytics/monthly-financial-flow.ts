@@ -135,7 +135,7 @@ const assertMonthReconciles = (month: MonthlyFinancialFlow) => {
   if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) - netEconomicOutflow
     || toCents(month.availableToAllocate) !== toCents(month.moneyIn) - toCents(month.observedRequiredCosts)
     || toCents(month.discretionaryConsumption) !== netEconomicOutflow - toCents(month.observedRequiredCosts)
-    || toCents(month.unknownAllocationResidual.amount ?? 0) !== toCents(month.availableToAllocate) - toCents(month.discretionaryConsumption) - toCents(month.verifiedWealthAllocation.amount ?? 0)
+    || toCents(month.remainingAvailable.amount ?? month.unknownAllocationResidual.amount ?? 0) !== toCents(month.availableToAllocate) - toCents(month.discretionaryConsumption) - toCents(month.verifiedWealthAllocation.amount ?? 0)
     || toCents(month.observedRequiredCosts) > toCents(month.moneyOut)
     || worldTotal !== netEconomicOutflow || !hierarchyReconciles) {
     throw new Error(`FINANCIAL_FLOW_RECONCILIATION_FAILED:${month.month}`);
@@ -200,6 +200,13 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
     const availableToAllocate = fromCents(toCents(moneyIn) - toCents(observedRequiredCosts));
     const residual = fromCents(toCents(availableToAllocate) - toCents(discretionaryConsumption) - toCents(verifiedWealth.amount ?? 0));
     const residualPercentage = availableToAllocate === 0 ? null : Math.round(toCents(residual) / toCents(availableToAllocate) * 10_000) / 100;
+    const remainingKnown = complete && unknownItems.length === 0 && verifiedWealth.amount !== null;
+    const unknownAllocationResidual: EvidenceLimitedAmount = remainingKnown
+      ? { status: "known", amount: 0, percentageOfAvailableToAllocate: 0, reason: "No unresolved allocation remains in this complete period." }
+      : { status: "partial", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Residual before any unverified wealth-building allocation; it is not assumed to remain spendable." };
+    const remainingAvailable: EvidenceLimitedAmount = remainingKnown
+      ? { status: "known", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Complete coverage, resolved economic meaning, and verified wealth destinations support this amount." }
+      : { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations and unresolved allocations are verified." };
     const availableToAllocatePercentage = moneyIn > 0 ? Math.round(toCents(availableToAllocate) / toCents(moneyIn) * 10_000) / 100 : null;
     const discretionaryConsumptionRate = availableToAllocate !== 0 ? Math.round(toCents(discretionaryConsumption) / toCents(availableToAllocate) * 10_000) / 100 : null;
     const byWorld = worldAllocation(economic, moneyIn, cash.moneyOut);
@@ -219,8 +226,7 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
       availableToAllocate, availableToAllocatePercentage,
       availableToAllocateChange: null, availableToAllocatePercentageChange: null, rollingThreeMonthAverage: null,
       verifiedWealthAllocation: { ...verifiedWealth, percentageOfAvailableToAllocate: verifiedWealth.amount !== null && availableToAllocate !== 0 ? Math.round(toCents(verifiedWealth.amount) / toCents(availableToAllocate) * 10_000) / 100 : null },
-      unknownAllocationResidual: { status: "partial", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Residual before any unverified wealth-building allocation; it is not assumed to remain spendable." },
-      remainingAvailable: { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations are verified." },
+      unknownAllocationResidual, remainingAvailable,
       discretionaryConsumptionRate,
       allocationBridge: {
         moneyIn: { amount: moneyIn, percentageOfMoneyIn: moneyIn === 0 ? null : 100 },
@@ -228,8 +234,7 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
         availableToAllocate: { amount: availableToAllocate, percentageOfMoneyIn: availableToAllocatePercentage },
         discretionaryConsumption: { amount: discretionaryConsumption, percentageOfAvailableToAllocate: discretionaryConsumptionRate },
         verifiedWealthAllocation: { ...verifiedWealth, percentageOfAvailableToAllocate: verifiedWealth.amount !== null && availableToAllocate !== 0 ? Math.round(toCents(verifiedWealth.amount) / toCents(availableToAllocate) * 10_000) / 100 : null },
-        unknownAllocationResidual: { status: "partial", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Residual before any unverified wealth-building allocation; it is not assumed to remain spendable." },
-        remainingAvailable: { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations are verified." },
+        unknownAllocationResidual, remainingAvailable,
         equation: `${moneyIn.toFixed(2)} - ${observedRequiredCosts.toFixed(2)} - ${discretionaryConsumption.toFixed(2)} - ${verifiedWealth.amount === null ? "Unknown" : verifiedWealth.amount.toFixed(2)} wealth allocation = Partial remaining; residual ${residual.toFixed(2)}`,
         reconciles: true,
       },
