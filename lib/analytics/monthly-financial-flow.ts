@@ -10,25 +10,30 @@ export type RequiredCostComponent = {
   normalizedMonthlyAmount: number; equivalentBiweeklyAmount: number; evidenceCount: number;
   supportingTransactions: readonly AnalyticsEvidence[];
 };
-export type AllocationBreakdown = { key: string; amount: number; transactionCount: number; percentageOfMoneyIn: number | null; percentageOfOutflow: number | null };
+export type AllocationBreakdown = { key: string; amount: number; transactionCount: number; percentageOfMoneyIn: number | null; percentageOfOutflow: number | null; percentageOfParent?: number | null };
+export type WorldAllocationBreakdown = AllocationBreakdown & { categories: readonly AllocationBreakdown[] };
+export type EvidenceLimitedAmount = { status: "known" | "partial" | "unknown"; amount: number | null; percentageOfAvailableToAllocate: number | null; reason: string | null };
 export type MonthlyFinancialFlow = {
   month: string; startDate: string; endDate: string; status: "complete" | "partial";
   coverage: { complete: boolean; confidence: "high" | "partial"; message: string };
   openingPosition: { status: "known"; amount: number; date: string } | { status: "unknown"; reason: string };
   transactionCount: number; moneyIn: number; moneyOut: number; rawCirculationIn: number; rawCirculationOut: number; netEconomicCashFlow: number;
-  requiredCosts: number; normalizedMonthlyRequiredCost: number; discretionarySpending: number;
-  availableMoney: number; availableMoneyPercentage: number | null; availableMoneyChange: number | null; availableMoneyPercentageChange: number | null; rollingThreeMonthAverage: number | null;
-  wealthBuildingAllocation: number | null; remainingUnallocatedAvailableMoney: number | null; wealthAllocationRate: number | null; discretionaryConsumptionRate: number | null;
+  observedRequiredCosts: number; requiredCostCoverage: { status: "sufficient" | "partial"; normalizedMonthlyAmount: number | null; reason: string };
+  discretionaryConsumption: number;
+  availableToAllocate: number; availableToAllocatePercentage: number | null; availableToAllocateChange: number | null; availableToAllocatePercentageChange: number | null; rollingThreeMonthAverage: number | null;
+  verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; discretionaryConsumptionRate: number | null;
+  allocationBridge: { moneyIn: { amount: number; percentageOfMoneyIn: 100 | null }; observedRequired: { amount: number; percentageOfMoneyIn: number | null }; availableToAllocate: { amount: number; percentageOfMoneyIn: number | null }; discretionaryConsumption: { amount: number; percentageOfAvailableToAllocate: number | null }; verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; equation: string; reconciles: true };
   transfers: number; creditCardSettlements: number; refunds: number; fees: number;
   unknownPartial: { amount: number; count: number };
   requiredCostComponents: readonly RequiredCostComponent[];
-  byWorld: readonly AllocationBreakdown[]; byCategory: readonly AllocationBreakdown[]; topMerchants: readonly AllocationBreakdown[];
+  byWorld: readonly WorldAllocationBreakdown[]; topMerchants: readonly AllocationBreakdown[];
   largestInflows: readonly AnalyticsEvidence[]; largestOutflows: readonly AnalyticsEvidence[];
-  trend: { comparable: boolean; moneyInChange: number | null; moneyInPercentageChange: number | null; requiredCostChange: number | null; availableMoneyChange: number | null; discretionaryChange: number | null; wealthAllocationChange: number | null; drivers: readonly string[] };
+  trend: { comparable: boolean; moneyInChange: number | null; moneyInPercentageChange: number | null; requiredCostChange: number | null; availableToAllocateChange: number | null; discretionaryChange: number | null; wealthAllocationChange: number | null; drivers: readonly string[] };
 };
 export type HistoricalFinancialFlow = {
   generatedThrough: string; startMonth: string; endMonth: string; months: readonly MonthlyFinancialFlow[];
-  all: { transactionCount: number; moneyIn: number; moneyOut: number; netEconomicCashFlow: number; requiredCosts: number; availableMoney: number; discretionarySpending: number; transfers: number; creditCardSettlements: number; refunds: number; fees: number; unknownPartial: { amount: number; count: number }; byWorld: readonly AllocationBreakdown[]; byCategory: readonly AllocationBreakdown[] };
+  definitions: { availableToAllocate: string; remainingAvailable: string; refunds: string; exclusions: string; partialCoverage: string };
+  all: { transactionCount: number; moneyIn: number; moneyOut: number; netEconomicCashFlow: number; observedRequiredCosts: number; availableToAllocate: number; discretionaryConsumption: number; verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; transfers: number; creditCardSettlements: number; refunds: number; fees: number; unknownPartial: { amount: number; count: number }; byWorld: readonly WorldAllocationBreakdown[] };
 };
 
 const DAY = 86_400_000;
@@ -115,27 +120,45 @@ const worldKey = (item: CanonicalTransaction) => isFinancialFee(item) ? "Fees"
   : item.attribution.world === "investments" ? "Investments / wealth"
   : item.attribution.world === "creditDebt" ? "Debt / liabilities"
   : !item.attribution.world || !item.attribution.category ? "Unknown / Partial" : "Lifestyle";
+const worldAllocation = (items: readonly CanonicalTransaction[], moneyIn: number, moneyOut: number): WorldAllocationBreakdown[] =>
+  allocation(items, worldKey, moneyIn, moneyOut).map((world) => ({
+    ...world,
+    categories: allocation(items.filter((item) => worldKey(item) === world.key), (item) => item.attribution.category ?? "Unknown / Partial", moneyIn, moneyOut)
+      .map((category) => ({ ...category, percentageOfParent: world.amount === 0 ? null : Math.round(category.amount / world.amount * 10_000) / 100 })),
+  }));
 const percentChange = (current: number, previous: number) => previous === 0 ? null : Math.round((current - previous) / Math.abs(previous) * 10_000) / 100;
 const assertMonthReconciles = (month: MonthlyFinancialFlow) => {
   const worldTotal = month.byWorld.reduce((sum, item) => sum + toCents(item.amount), 0);
-  const categoryTotal = month.byCategory.reduce((sum, item) => sum + toCents(item.amount), 0);
   const netEconomicOutflow = toCents(month.moneyOut) - toCents(month.refunds);
-  if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) - toCents(month.moneyOut)
-    || toCents(month.availableMoney) !== toCents(month.moneyIn) - toCents(month.requiredCosts)
-    || toCents(month.discretionarySpending) !== toCents(month.moneyOut) - toCents(month.requiredCosts)
-    || toCents(month.requiredCosts) > toCents(month.moneyOut)
-    || worldTotal !== netEconomicOutflow || categoryTotal !== netEconomicOutflow) {
+  const hierarchyReconciles = month.byWorld.every((world) => world.categories.reduce((sum, item) => sum + toCents(item.amount), 0) === toCents(world.amount));
+  if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) - netEconomicOutflow
+    || toCents(month.availableToAllocate) !== toCents(month.moneyIn) - toCents(month.observedRequiredCosts)
+    || toCents(month.discretionaryConsumption) !== netEconomicOutflow - toCents(month.observedRequiredCosts)
+    || toCents(month.unknownAllocationResidual.amount ?? 0) !== toCents(month.availableToAllocate) - toCents(month.discretionaryConsumption)
+    || toCents(month.observedRequiredCosts) > toCents(month.moneyOut)
+    || worldTotal !== netEconomicOutflow || !hierarchyReconciles) {
     throw new Error(`FINANCIAL_FLOW_RECONCILIATION_FAILED:${month.month}`);
   }
 };
-const mergeBreakdowns = (months: readonly MonthlyFinancialFlow[], field: "byWorld" | "byCategory", moneyIn: number, moneyOut: number) => {
+const mergeBreakdowns = (months: readonly MonthlyFinancialFlow[], moneyIn: number, moneyOut: number): WorldAllocationBreakdown[] => {
   const grouped = new Map<string, { cents: number; count: number }>();
-  for (const month of months) for (const item of month[field]) {
+  for (const month of months) for (const item of month.byWorld) {
     const current = grouped.get(item.key) ?? { cents: 0, count: 0 }; current.cents += toCents(item.amount); current.count += item.transactionCount; grouped.set(item.key, current);
   }
   return [...grouped].map(([key, value]) => ({ key, amount: fromCents(value.cents), transactionCount: value.count,
     percentageOfMoneyIn: moneyIn > 0 ? Math.round(value.cents / toCents(moneyIn) * 10_000) / 100 : null,
     percentageOfOutflow: moneyOut > 0 ? Math.round(value.cents / toCents(moneyOut) * 10_000) / 100 : null,
+    categories: (() => {
+      const categories = new Map<string, { cents: number; count: number }>();
+      for (const month of months) for (const world of month.byWorld.filter((item) => item.key === key)) for (const category of world.categories) {
+        const current = categories.get(category.key) ?? { cents: 0, count: 0 }; current.cents += toCents(category.amount); current.count += category.transactionCount; categories.set(category.key, current);
+      }
+      return [...categories].map(([categoryKey, category]) => ({ key: categoryKey, amount: fromCents(category.cents), transactionCount: category.count,
+        percentageOfMoneyIn: moneyIn > 0 ? Math.round(category.cents / toCents(moneyIn) * 10_000) / 100 : null,
+        percentageOfOutflow: moneyOut > 0 ? Math.round(category.cents / toCents(moneyOut) * 10_000) / 100 : null,
+        percentageOfParent: value.cents === 0 ? null : Math.round(category.cents / value.cents * 10_000) / 100,
+      })).sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
+    })(),
   })).sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
 };
 
@@ -156,61 +179,93 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
     }));
     const required = period.filter((item) => isPrimaryOutflow(item) && !isFinancialFee(item)
       && (explicitFixedObligation(item) || componentKeys.has(identity(item))));
-    const requiredCosts = sum(required); const discretionarySpending = fromCents(toCents(cash.moneyOut) - toCents(requiredCosts));
-    const availableMoney = fromCents(toCents(cash.moneyIn) - toCents(requiredCosts));
     const coverage = statementCoverage(imports, accountNames, range); const complete = coverage.selectedPeriodCovered === true;
     const unknownItems = period.filter((item) => genuinelyUnknownIds.has(item.id) || intentionallyDeferredIds.has(item.id) || (isPrimaryOutflow(item) && (!item.attribution.category || !item.attribution.world)));
     const economic = period.filter((item) => isPrimaryOutflow(item) || isRefund(item));
     const refunds = sum(period.filter(isRefund)); const fees = sum(period.filter(isFinancialFee));
-    const byWorld = allocation(economic, worldKey, cash.moneyIn, cash.moneyOut);
-    const byCategory = allocation(economic, (item) => item.attribution.category ?? "Unknown / Partial", cash.moneyIn, cash.moneyOut);
-    const topMerchants = allocation(economic, (item) => item.normalizedCounterparty || item.rawDescription, cash.moneyIn, cash.moneyOut).slice(0, 10);
+    const moneyIn = fromCents(toCents(cash.moneyIn) - toCents(refunds));
+    const observedRequiredCosts = sum(required);
+    const netEconomicOutflow = fromCents(toCents(cash.moneyOut) - toCents(refunds));
+    const discretionaryConsumption = fromCents(toCents(netEconomicOutflow) - toCents(observedRequiredCosts));
+    const availableToAllocate = fromCents(toCents(moneyIn) - toCents(observedRequiredCosts));
+    const residual = fromCents(toCents(availableToAllocate) - toCents(discretionaryConsumption));
+    const residualPercentage = availableToAllocate === 0 ? null : Math.round(toCents(residual) / toCents(availableToAllocate) * 10_000) / 100;
+    const availableToAllocatePercentage = moneyIn > 0 ? Math.round(toCents(availableToAllocate) / toCents(moneyIn) * 10_000) / 100 : null;
+    const discretionaryConsumptionRate = availableToAllocate !== 0 ? Math.round(toCents(discretionaryConsumption) / toCents(availableToAllocate) * 10_000) / 100 : null;
+    const byWorld = worldAllocation(economic, moneyIn, cash.moneyOut);
+    const topMerchants = allocation(economic, (item) => item.normalizedCounterparty || item.rawDescription, moneyIn, cash.moneyOut).slice(0, 10);
     const movements = largestMovements(transactions, range, 5);
     const current: MonthlyFinancialFlow = {
       month, startDate, endDate: periodEnd, status: complete ? "complete" : "partial",
       coverage: { complete, confidence: complete ? "high" : "partial", message: complete ? "All imported transaction accounts cover this period." : "At least one imported transaction account does not cover this full period." },
       openingPosition: { status: "unknown", reason: "A synchronized whole-person opening balance snapshot is unavailable for this month." },
-      transactionCount: period.length, moneyIn: cash.moneyIn, moneyOut: cash.moneyOut, rawCirculationIn: cash.circulationIn, rawCirculationOut: cash.circulationOut, netEconomicCashFlow: cash.net,
-      requiredCosts, normalizedMonthlyRequiredCost: fromCents(components.reduce((total, item) => total + toCents(item.normalizedMonthlyAmount), 0)), discretionarySpending,
-      availableMoney, availableMoneyPercentage: cash.moneyIn > 0 ? Math.round(toCents(availableMoney) / toCents(cash.moneyIn) * 10_000) / 100 : null,
-      availableMoneyChange: null, availableMoneyPercentageChange: null, rollingThreeMonthAverage: null,
-      wealthBuildingAllocation: null, remainingUnallocatedAvailableMoney: null, wealthAllocationRate: null,
-      discretionaryConsumptionRate: availableMoney > 0 ? Math.round(toCents(discretionarySpending) / toCents(availableMoney) * 10_000) / 100 : null,
+      transactionCount: period.length, moneyIn, moneyOut: cash.moneyOut, rawCirculationIn: cash.circulationIn, rawCirculationOut: cash.circulationOut, netEconomicCashFlow: residual,
+      observedRequiredCosts,
+      requiredCostCoverage: { status: complete ? "sufficient" : "partial", normalizedMonthlyAmount: complete ? fromCents(components.reduce((total, item) => total + toCents(item.normalizedMonthlyAmount), 0)) : null,
+        reason: complete ? "Full imported transaction-account coverage supports the observed and normalized Required Cost values." : "Observed Required Costs reflect only available source coverage and must not be read as the Person's actual monthly requirement." },
+      discretionaryConsumption,
+      availableToAllocate, availableToAllocatePercentage,
+      availableToAllocateChange: null, availableToAllocatePercentageChange: null, rollingThreeMonthAverage: null,
+      verifiedWealthAllocation: { status: "unknown", amount: null, percentageOfAvailableToAllocate: null, reason: "No destination-linked evidence verifies wealth-building allocations for this period." },
+      unknownAllocationResidual: { status: "partial", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Residual before any unverified wealth-building allocation; it is not assumed to remain spendable." },
+      remainingAvailable: { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations are verified." },
+      discretionaryConsumptionRate,
+      allocationBridge: {
+        moneyIn: { amount: moneyIn, percentageOfMoneyIn: moneyIn === 0 ? null : 100 },
+        observedRequired: { amount: observedRequiredCosts, percentageOfMoneyIn: moneyIn === 0 ? null : Math.round(toCents(observedRequiredCosts) / toCents(moneyIn) * 10_000) / 100 },
+        availableToAllocate: { amount: availableToAllocate, percentageOfMoneyIn: availableToAllocatePercentage },
+        discretionaryConsumption: { amount: discretionaryConsumption, percentageOfAvailableToAllocate: discretionaryConsumptionRate },
+        verifiedWealthAllocation: { status: "unknown", amount: null, percentageOfAvailableToAllocate: null, reason: "No destination-linked evidence verifies wealth-building allocations for this period." },
+        unknownAllocationResidual: { status: "partial", amount: residual, percentageOfAvailableToAllocate: residualPercentage, reason: "Residual before any unverified wealth-building allocation; it is not assumed to remain spendable." },
+        remainingAvailable: { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations are verified." },
+        equation: `${moneyIn.toFixed(2)} - ${observedRequiredCosts.toFixed(2)} - ${discretionaryConsumption.toFixed(2)} - Unknown wealth allocation = Partial remaining; pre-wealth residual ${residual.toFixed(2)}`,
+        reconciles: true,
+      },
       transfers: cash.transfers, creditCardSettlements: cash.creditCardPayments, refunds, fees,
       unknownPartial: { amount: sum(unknownItems), count: unknownItems.length }, requiredCostComponents: components,
-      byWorld, byCategory, topMerchants,
+      byWorld, topMerchants,
       largestInflows: movements.inflows.map((item) => evidence(item, accountNames)),
       largestOutflows: movements.outflows.map((item) => evidence(item, accountNames)),
-      trend: { comparable: false, moneyInChange: null, moneyInPercentageChange: null, requiredCostChange: null, availableMoneyChange: null, discretionaryChange: null, wealthAllocationChange: null, drivers: [] },
+      trend: { comparable: false, moneyInChange: null, moneyInPercentageChange: null, requiredCostChange: null, availableToAllocateChange: null, discretionaryChange: null, wealthAllocationChange: null, drivers: [] },
     };
     const previous = months.at(-1);
     if (previous && previous.status === "complete" && current.status === "complete") {
-      current.availableMoneyChange = fromCents(toCents(current.availableMoney) - toCents(previous.availableMoney));
-      current.availableMoneyPercentageChange = percentChange(current.availableMoney, previous.availableMoney);
+      current.availableToAllocateChange = fromCents(toCents(current.availableToAllocate) - toCents(previous.availableToAllocate));
+      current.availableToAllocatePercentageChange = percentChange(current.availableToAllocate, previous.availableToAllocate);
       const worldChanges = current.byWorld.map((item) => ({ key: item.key, change: toCents(item.amount) - toCents(previous.byWorld.find((prior) => prior.key === item.key)?.amount ?? 0) }))
         .sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 2).filter((item) => item.change !== 0);
       current.trend = { comparable: true,
         moneyInChange: fromCents(toCents(current.moneyIn) - toCents(previous.moneyIn)), moneyInPercentageChange: percentChange(current.moneyIn, previous.moneyIn),
-        requiredCostChange: fromCents(toCents(current.requiredCosts) - toCents(previous.requiredCosts)), availableMoneyChange: current.availableMoneyChange,
-        discretionaryChange: fromCents(toCents(current.discretionarySpending) - toCents(previous.discretionarySpending)), wealthAllocationChange: null,
+        requiredCostChange: fromCents(toCents(current.observedRequiredCosts) - toCents(previous.observedRequiredCosts)), availableToAllocateChange: current.availableToAllocateChange,
+        discretionaryChange: fromCents(toCents(current.discretionaryConsumption) - toCents(previous.discretionaryConsumption)), wealthAllocationChange: null,
         drivers: worldChanges.map((item) => `${item.key} ${item.change > 0 ? "increased" : "decreased"} by ${fromCents(Math.abs(item.change)).toFixed(2)}`),
       };
     }
     const comparable = [...months, current].filter((item) => item.status === "complete").slice(-3);
-    if (current.status === "complete" && comparable.length === 3) current.rollingThreeMonthAverage = fromCents(Math.round(comparable.reduce((total, item) => total + toCents(item.availableMoney), 0) / 3));
+    if (current.status === "complete" && comparable.length === 3) current.rollingThreeMonthAverage = fromCents(Math.round(comparable.reduce((total, item) => total + toCents(item.availableToAllocate), 0) / 3));
     assertMonthReconciles(current);
     months.push(current);
   }
-  const total = (field: "moneyIn" | "moneyOut" | "netEconomicCashFlow" | "requiredCosts" | "availableMoney" | "discretionarySpending" | "transfers" | "creditCardSettlements" | "refunds" | "fees") =>
+  const total = (field: "moneyIn" | "moneyOut" | "netEconomicCashFlow" | "observedRequiredCosts" | "availableToAllocate" | "discretionaryConsumption" | "transfers" | "creditCardSettlements" | "refunds" | "fees") =>
     fromCents(months.reduce((sum, month) => sum + toCents(month[field]), 0));
   const allMoneyIn = total("moneyIn"); const allMoneyOut = total("moneyOut");
   void investmentSnapshots;
-  return { generatedThrough: endDate, startMonth, endMonth, months, all: {
+  return { generatedThrough: endDate, startMonth, endMonth, months,
+    definitions: {
+      availableToAllocate: "Money In excluding refunds, minus observed Required Costs. This is financial capacity before discretionary consumption, not money still available to spend.",
+      remainingAvailable: "Available to Allocate minus net discretionary consumption and verified wealth-building allocations; Partial/Unknown when wealth destinations are not factually linked.",
+      refunds: "Refunds reduce consumption in their canonical World/category and are excluded from Money In.",
+      exclusions: "Transfers and credit-card settlements are circulation and never consumption or wealth allocation.",
+      partialCoverage: "Observed Required Costs are source-period facts; normalization and personal trend claims are suppressed when statement coverage is incomplete.",
+    }, all: {
     transactionCount: months.reduce((sum, month) => sum + month.transactionCount, 0), moneyIn: allMoneyIn, moneyOut: allMoneyOut,
-    netEconomicCashFlow: total("netEconomicCashFlow"), requiredCosts: total("requiredCosts"), availableMoney: total("availableMoney"), discretionarySpending: total("discretionarySpending"),
+    netEconomicCashFlow: total("netEconomicCashFlow"), observedRequiredCosts: total("observedRequiredCosts"), availableToAllocate: total("availableToAllocate"), discretionaryConsumption: total("discretionaryConsumption"),
+    verifiedWealthAllocation: { status: "unknown", amount: null, percentageOfAvailableToAllocate: null, reason: "No destination-linked evidence verifies wealth-building allocations." },
+    unknownAllocationResidual: { status: "partial", amount: total("netEconomicCashFlow"), percentageOfAvailableToAllocate: total("availableToAllocate") === 0 ? null : Math.round(toCents(total("netEconomicCashFlow")) / toCents(total("availableToAllocate")) * 10_000) / 100, reason: "Residual before any unverified wealth-building allocation." },
+    remainingAvailable: { status: "partial", amount: null, percentageOfAvailableToAllocate: null, reason: "Cannot be calculated until wealth-building destinations are verified." },
     transfers: total("transfers"), creditCardSettlements: total("creditCardSettlements"), refunds: total("refunds"), fees: total("fees"),
     unknownPartial: { amount: fromCents(months.reduce((sum, month) => sum + toCents(month.unknownPartial.amount), 0)), count: months.reduce((sum, month) => sum + month.unknownPartial.count, 0) },
-    byWorld: mergeBreakdowns(months, "byWorld", allMoneyIn, allMoneyOut), byCategory: mergeBreakdowns(months, "byCategory", allMoneyIn, allMoneyOut),
+    byWorld: mergeBreakdowns(months, allMoneyIn, allMoneyOut),
   } };
 };
 

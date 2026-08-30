@@ -112,18 +112,28 @@ test("monthly financial flow is historical, coverage-aware, reconciled, and futu
   ];
   const timeline = buildHistoricalFinancialFlow({ transactions: items, imports: [imported("coverage")], investmentSnapshots: [], accountNames: new Map([["cash", "Cash"]]), endDate: "2025-01-31" });
   assert.equal(timeline.months.length, 2);
-  assert.deepEqual(timeline.months.map((month) => [month.month, month.status, month.moneyIn, month.moneyOut, month.requiredCosts, month.availableMoney]), [
-    ["2024-12", "complete", 5000, 1200, 1000, 4000], ["2025-01", "complete", 5050, 1500, 1200, 3850],
+  assert.deepEqual(timeline.months.map((month) => [month.month, month.status, month.moneyIn, month.moneyOut, month.observedRequiredCosts, month.availableToAllocate, month.discretionaryConsumption]), [
+    ["2024-12", "complete", 5000, 1200, 1000, 4000, 200], ["2025-01", "complete", 5000, 1500, 1200, 3800, 250],
   ]);
-  assert.equal(timeline.months[1].availableMoneyPercentageChange, -3.75);
+  assert.equal(timeline.months[1].availableToAllocatePercentageChange, -5);
+  assert.equal(timeline.months[1].unknownAllocationResidual.amount, 3550);
+  assert.equal(timeline.months[1].remainingAvailable.amount, null);
+  assert.equal(timeline.months[1].allocationBridge.reconciles, true);
   assert.equal(timeline.months[0].creditCardSettlements, 800);
   assert.equal(timeline.months[0].requiredCostComponents[0].evidenceCount, 3);
   assert.equal(timeline.months[0].requiredCostComponents[0].supportingTransactions.some((item) => item.date > "2024-12-31"), false);
   assert.equal(timeline.months[1].byWorld.find((item) => item.key === "Home")?.amount, 1200);
+  assert.equal(timeline.months[1].byWorld.find((item) => item.key === "Home")?.categories.reduce((sum, item) => sum + Math.round(item.amount * 100), 0), 120000);
   assert.equal(timeline.months[1].fees, 0);
   assert.equal(timeline.months[1].byWorld.reduce((sum, item) => sum + Math.round(item.amount * 100), 0), 145000);
   assert.equal(timeline.all.transactionCount, 9);
   assert.equal(timeline.all.creditCardSettlements, 800);
+  assert.equal(timeline.all.byWorld.every((world) => world.categories.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) === Math.round(world.amount * 100)), true);
+
+  const partial = buildHistoricalFinancialFlow({ transactions: items, imports: [], investmentSnapshots: [], accountNames: new Map([["cash", "Cash"]]), endDate: "2025-01-31" });
+  assert.equal(partial.months[0].requiredCostCoverage.status, "partial");
+  assert.equal(partial.months[0].requiredCostCoverage.normalizedMonthlyAmount, null);
+  assert.equal(partial.months[1].trend.comparable, false);
 });
 
 test("goal intentions remain metadata and require an explicit emergency-fund horizon", () => {
