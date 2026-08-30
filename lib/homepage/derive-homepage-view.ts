@@ -15,6 +15,7 @@ import {
   summarizeCashFlow,
   summarizeSpending,
 } from "../analytics/financial-analytics.ts";
+import { buildHistoricalFinancialFlow } from "../analytics/monthly-financial-flow.ts";
 import { resolveFinancialPeriod, type FinancialPeriodKey } from "./financial-period.ts";
 import { detectMissingExpectedEvents, detectRecurringPatterns } from "./recurring-patterns.ts";
 
@@ -395,6 +396,17 @@ export const deriveHomepageView = ({
   const coverageAnalytics = imports === null ? null : statementCoverage(imports, accountNames, analyticsRange);
   const coverageGaps = coverageAnalytics?.accounts.flatMap((account) => account.gaps.map((gap) => ({ accountName: account.accountName, ...gap }))) ?? [];
   const selectedPeriodCovered = coverageAnalytics?.selectedPeriodCovered === true;
+  const historicalAnalytics = transactions !== null && imports !== null
+    ? buildHistoricalFinancialFlow({
+        transactions: visibleHistoryTransactions,
+        imports,
+        investmentSnapshots: investmentSnapshots ?? [],
+        accountNames,
+        genuinelyUnknownIds: genuinelyUnknownTransactionIds ?? new Set(),
+        intentionallyDeferredIds: deferredReviewTransactionIds,
+        endDate: allDates.at(-1) && allDates.at(-1)! < asOfDate ? allDates.at(-1)! : asOfDate,
+      })
+    : null;
   const assistantSummary: string[] = [];
   if (periodHasActivity) {
     assistantSummary.push(`${periodTransactions.filter(isPrimaryOutflow).length} qualifying outflows are available for the selected ${selectedPeriod.label.toLowerCase()}.`);
@@ -556,6 +568,7 @@ export const deriveHomepageView = ({
       intentionallyDeferredCount: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning === "unknown" && deferredReviewTransactionIds.has(transaction.id)).length,
       categoryAmbiguityCount: visibleHistoryTransactions.filter((transaction) => transaction.financialMeaning !== "unknown" && isPrimaryOutflow(transaction) && transaction.attribution.category === null).length,
     },
+    analytics: historicalAnalytics,
     assistantSummary,
     insights,
   };

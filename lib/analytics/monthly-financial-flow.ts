@@ -1,0 +1,226 @@
+import type { ImportJournalRecord } from "../../types/imports.ts";
+import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
+import type { CanonicalTransaction } from "../../types/transactions.ts";
+import { isPrimaryOutflow, isRefund, largestMovements, statementCoverage, summarizeCashFlow, transactionsInRange } from "./financial-analytics.ts";
+
+export type AnalyticsEvidence = { date: string; description: string; amount: number; accountName: string };
+export type RequiredCostComponent = {
+  key: string; label: string; category: string | null; world: string; kind: "fixed" | "variable";
+  cadence: "weekly" | "biweekly" | "monthly"; confidence: "strong" | "expected";
+  normalizedMonthlyAmount: number; equivalentBiweeklyAmount: number; evidenceCount: number;
+  supportingTransactions: readonly AnalyticsEvidence[];
+};
+export type AllocationBreakdown = { key: string; amount: number; transactionCount: number; percentageOfMoneyIn: number | null; percentageOfOutflow: number | null };
+export type MonthlyFinancialFlow = {
+  month: string; startDate: string; endDate: string; status: "complete" | "partial";
+  coverage: { complete: boolean; confidence: "high" | "partial"; message: string };
+  openingPosition: { status: "known"; amount: number; date: string } | { status: "unknown"; reason: string };
+  transactionCount: number; moneyIn: number; moneyOut: number; rawCirculationIn: number; rawCirculationOut: number; netEconomicCashFlow: number;
+  requiredCosts: number; normalizedMonthlyRequiredCost: number; discretionarySpending: number;
+  availableMoney: number; availableMoneyPercentage: number | null; availableMoneyChange: number | null; availableMoneyPercentageChange: number | null; rollingThreeMonthAverage: number | null;
+  wealthBuildingAllocation: number | null; remainingUnallocatedAvailableMoney: number | null; wealthAllocationRate: number | null; discretionaryConsumptionRate: number | null;
+  transfers: number; creditCardSettlements: number; refunds: number; fees: number;
+  unknownPartial: { amount: number; count: number };
+  requiredCostComponents: readonly RequiredCostComponent[];
+  byWorld: readonly AllocationBreakdown[]; byCategory: readonly AllocationBreakdown[]; topMerchants: readonly AllocationBreakdown[];
+  largestInflows: readonly AnalyticsEvidence[]; largestOutflows: readonly AnalyticsEvidence[];
+  trend: { comparable: boolean; moneyInChange: number | null; moneyInPercentageChange: number | null; requiredCostChange: number | null; availableMoneyChange: number | null; discretionaryChange: number | null; wealthAllocationChange: number | null; drivers: readonly string[] };
+};
+export type HistoricalFinancialFlow = {
+  generatedThrough: string; startMonth: string; endMonth: string; months: readonly MonthlyFinancialFlow[];
+  all: { transactionCount: number; moneyIn: number; moneyOut: number; netEconomicCashFlow: number; requiredCosts: number; availableMoney: number; discretionarySpending: number; transfers: number; creditCardSettlements: number; refunds: number; fees: number; unknownPartial: { amount: number; count: number }; byWorld: readonly AllocationBreakdown[]; byCategory: readonly AllocationBreakdown[] };
+};
+
+const DAY = 86_400_000;
+const toCents = (value: number) => Math.round(value * 100);
+const fromCents = (value: number) => value / 100;
+const sum = (items: readonly CanonicalTransaction[]) => fromCents(items.reduce((total, item) => total + toCents(item.amount), 0));
+const iso = (date: Date) => date.toISOString().slice(0, 10);
+const monthEnd = (month: string) => iso(new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)));
+const monthSequence = (start: string, end: string) => {
+  const values: string[] = [];
+  let cursor = `${start}-01`;
+  while (cursor.slice(0, 7) <= end) {
+    values.push(cursor.slice(0, 7));
+    const date = new Date(`${cursor}T00:00:00.000Z`);
+    cursor = iso(new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)));
+  }
+  return values;
+};
+const median = (values: readonly number[]) => {
+  const ordered = [...values].sort((a, b) => a - b); const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 ? ordered[middle] : Math.round((ordered[middle - 1] + ordered[middle]) / 2);
+};
+const days = (left: string, right: string) => Math.round((Date.parse(`${right}T00:00:00Z`) - Date.parse(`${left}T00:00:00Z`)) / DAY);
+const cadence = (interval: number) => interval >= 6 && interval <= 8 ? { name: "weekly" as const, days: 7, monthly: 52 / 12 }
+  : interval >= 12 && interval <= 16 ? { name: "biweekly" as const, days: 14, monthly: 26 / 12 }
+  : interval >= 27 && interval <= 33 ? { name: "monthly" as const, days: 30, monthly: 1 } : null;
+const requiredCategory = (transaction: CanonicalTransaction) => {
+  const category = transaction.attribution.category?.trim() ?? "";
+  return /mortgage|rent|insurance|utilit|hydro|electric|water|gas bill|telecom|internet|mobile|phone|grocer|medical|health|childcare|daycare|transit|property tax|municipal tax|vehicle payment|auto payment|fuel/i.test(category);
+};
+const explicitFixedObligation = (transaction: CanonicalTransaction) =>
+  /mortgage|rent|property tax|municipal tax|vehicle payment|auto payment|insurance/i.test(transaction.attribution.category?.trim() ?? "");
+const isFinancialFee = (transaction: CanonicalTransaction) => /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? "")
+  || ((transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest")
+    && transaction.attribution.world !== "home" && transaction.attribution.world !== "vehicle" && transaction.attribution.world !== "investments");
+const identity = (transaction: CanonicalTransaction) => [transaction.accountId, transaction.normalizedCounterparty.trim().toLocaleUpperCase("en-CA"), transaction.attribution.category ?? "", transaction.attribution.world ?? ""].join("|");
+const evidence = (transaction: CanonicalTransaction, accountNames: ReadonlyMap<string, string>): AnalyticsEvidence => ({
+  date: transaction.transactionDate, description: transaction.rawDescription, amount: transaction.amount,
+  accountName: accountNames.get(transaction.accountId) ?? "Unknown account",
+});
+const detectRequiredCosts = (transactions: readonly CanonicalTransaction[], asOfDate: string, accountNames: ReadonlyMap<string, string>) => {
+  const eligible = transactions.filter((item) => item.transactionDate <= asOfDate && item.status === "posted" && isPrimaryOutflow(item) && !isFinancialFee(item) && requiredCategory(item));
+  const groups = new Map<string, CanonicalTransaction[]>();
+  for (const item of eligible) groups.set(identity(item), [...(groups.get(identity(item)) ?? []), item]);
+  const components: Array<RequiredCostComponent & { matchKey: string }> = [];
+  for (const [key, group] of groups) {
+    const ordered = [...group].sort((a, b) => a.transactionDate.localeCompare(b.transactionDate));
+    if (ordered.length < 3) continue;
+    const intervals = ordered.slice(1).map((item, index) => days(ordered[index].transactionDate, item.transactionDate));
+    const detected = cadence(median(intervals.slice(-5)));
+    if (!detected) continue;
+    const matching = intervals.filter((interval) => Math.abs(interval - detected.days) <= (detected.name === "monthly" ? 4 : 3)).length;
+    if (matching < Math.max(2, intervals.length - 1)) continue;
+    const recent = ordered.slice(-6); const medianCents = median(recent.map((item) => toCents(item.amount)));
+    const deviation = recent.reduce((total, item) => total + Math.abs(toCents(item.amount) - medianCents), 0) / recent.length / Math.max(medianCents, 1);
+    const normalizedCents = Math.round(medianCents * detected.monthly);
+    components.push({
+      key: "", matchKey: key, label: ordered.at(-1)!.normalizedCounterparty || ordered.at(-1)!.rawDescription,
+      category: ordered.at(-1)!.attribution.category, world: ordered.at(-1)!.attribution.world ?? "Unknown",
+      kind: deviation <= 0.1 ? "fixed" : "variable", cadence: detected.name,
+      confidence: ordered.length >= 5 && matching >= intervals.length - 1 ? "strong" : "expected",
+      normalizedMonthlyAmount: fromCents(normalizedCents), equivalentBiweeklyAmount: fromCents(Math.round(normalizedCents * 12 / 26)),
+      evidenceCount: ordered.length, supportingTransactions: recent.map((item) => evidence(item, accountNames)),
+    });
+  }
+  return components.sort((a, b) => b.normalizedMonthlyAmount - a.normalizedMonthlyAmount || a.label.localeCompare(b.label))
+    .map((component, index) => ({ ...component, key: `required-${index + 1}` }));
+};
+const signedOutflowCents = (item: CanonicalTransaction) => isPrimaryOutflow(item) ? toCents(item.amount) : isRefund(item) ? -toCents(item.amount) : 0;
+const allocation = (items: readonly CanonicalTransaction[], keyFor: (item: CanonicalTransaction) => string, moneyIn: number, moneyOut: number) => {
+  const grouped = new Map<string, { amount: number; count: number }>();
+  for (const item of items) {
+    const impact = signedOutflowCents(item); if (!impact) continue; const key = keyFor(item);
+    const current = grouped.get(key) ?? { amount: 0, count: 0 }; current.amount += impact; current.count += 1; grouped.set(key, current);
+  }
+  return [...grouped].map(([key, value]) => ({ key, amount: fromCents(value.amount), transactionCount: value.count,
+    percentageOfMoneyIn: moneyIn > 0 ? Math.round(value.amount / toCents(moneyIn) * 10_000) / 100 : null,
+    percentageOfOutflow: moneyOut > 0 ? Math.round(value.amount / toCents(moneyOut) * 10_000) / 100 : null,
+  })).sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
+};
+const worldKey = (item: CanonicalTransaction) => isFinancialFee(item) ? "Fees"
+  : item.attribution.world === "home" ? "Home"
+  : item.attribution.world === "vehicle" ? "Vehicle"
+  : item.attribution.world === "investments" ? "Investments / wealth"
+  : item.attribution.world === "creditDebt" ? "Debt / liabilities"
+  : !item.attribution.world || !item.attribution.category ? "Unknown / Partial" : "Lifestyle";
+const percentChange = (current: number, previous: number) => previous === 0 ? null : Math.round((current - previous) / Math.abs(previous) * 10_000) / 100;
+const assertMonthReconciles = (month: MonthlyFinancialFlow) => {
+  const worldTotal = month.byWorld.reduce((sum, item) => sum + toCents(item.amount), 0);
+  const categoryTotal = month.byCategory.reduce((sum, item) => sum + toCents(item.amount), 0);
+  const netEconomicOutflow = toCents(month.moneyOut) - toCents(month.refunds);
+  if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) - toCents(month.moneyOut)
+    || toCents(month.availableMoney) !== toCents(month.moneyIn) - toCents(month.requiredCosts)
+    || toCents(month.discretionarySpending) !== toCents(month.moneyOut) - toCents(month.requiredCosts)
+    || toCents(month.requiredCosts) > toCents(month.moneyOut)
+    || worldTotal !== netEconomicOutflow || categoryTotal !== netEconomicOutflow) {
+    throw new Error(`FINANCIAL_FLOW_RECONCILIATION_FAILED:${month.month}`);
+  }
+};
+const mergeBreakdowns = (months: readonly MonthlyFinancialFlow[], field: "byWorld" | "byCategory", moneyIn: number, moneyOut: number) => {
+  const grouped = new Map<string, { cents: number; count: number }>();
+  for (const month of months) for (const item of month[field]) {
+    const current = grouped.get(item.key) ?? { cents: 0, count: 0 }; current.cents += toCents(item.amount); current.count += item.transactionCount; grouped.set(item.key, current);
+  }
+  return [...grouped].map(([key, value]) => ({ key, amount: fromCents(value.cents), transactionCount: value.count,
+    percentageOfMoneyIn: moneyIn > 0 ? Math.round(value.cents / toCents(moneyIn) * 10_000) / 100 : null,
+    percentageOfOutflow: moneyOut > 0 ? Math.round(value.cents / toCents(moneyOut) * 10_000) / 100 : null,
+  })).sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key));
+};
+
+export const buildHistoricalFinancialFlow = ({ transactions, imports, investmentSnapshots, accountNames, genuinelyUnknownIds = new Set(), intentionallyDeferredIds = new Set(), startMonth = "2024-12", endDate }: {
+  transactions: readonly CanonicalTransaction[]; imports: readonly ImportJournalRecord[]; investmentSnapshots: readonly CanonicalInvestmentSnapshot[];
+  accountNames: ReadonlyMap<string, string>; genuinelyUnknownIds?: ReadonlySet<string>; intentionallyDeferredIds?: ReadonlySet<string>; startMonth?: string; endDate: string;
+}): HistoricalFinancialFlow => {
+  const endMonth = endDate.slice(0, 7);
+  const months: MonthlyFinancialFlow[] = [];
+  for (const month of monthSequence(startMonth, endMonth)) {
+    const startDate = `${month}-01`; const periodEnd = month === endMonth ? endDate : monthEnd(month); const range = { startDate, endDate: periodEnd };
+    const period = transactionsInRange(transactions, range); const cash = summarizeCashFlow(transactions, range);
+    const detectedComponents = detectRequiredCosts(transactions, periodEnd, accountNames); const componentKeys = new Set(detectedComponents.map((item) => item.matchKey));
+    const components: RequiredCostComponent[] = detectedComponents.map((item) => ({
+      key: item.key, label: item.label, category: item.category, world: item.world, kind: item.kind, cadence: item.cadence,
+      confidence: item.confidence, normalizedMonthlyAmount: item.normalizedMonthlyAmount, equivalentBiweeklyAmount: item.equivalentBiweeklyAmount,
+      evidenceCount: item.evidenceCount, supportingTransactions: item.supportingTransactions,
+    }));
+    const required = period.filter((item) => isPrimaryOutflow(item) && !isFinancialFee(item)
+      && (explicitFixedObligation(item) || componentKeys.has(identity(item))));
+    const requiredCosts = sum(required); const discretionarySpending = fromCents(toCents(cash.moneyOut) - toCents(requiredCosts));
+    const availableMoney = fromCents(toCents(cash.moneyIn) - toCents(requiredCosts));
+    const coverage = statementCoverage(imports, accountNames, range); const complete = coverage.selectedPeriodCovered === true;
+    const unknownItems = period.filter((item) => genuinelyUnknownIds.has(item.id) || intentionallyDeferredIds.has(item.id) || (isPrimaryOutflow(item) && (!item.attribution.category || !item.attribution.world)));
+    const economic = period.filter((item) => isPrimaryOutflow(item) || isRefund(item));
+    const refunds = sum(period.filter(isRefund)); const fees = sum(period.filter(isFinancialFee));
+    const byWorld = allocation(economic, worldKey, cash.moneyIn, cash.moneyOut);
+    const byCategory = allocation(economic, (item) => item.attribution.category ?? "Unknown / Partial", cash.moneyIn, cash.moneyOut);
+    const topMerchants = allocation(economic, (item) => item.normalizedCounterparty || item.rawDescription, cash.moneyIn, cash.moneyOut).slice(0, 10);
+    const movements = largestMovements(transactions, range, 5);
+    const current: MonthlyFinancialFlow = {
+      month, startDate, endDate: periodEnd, status: complete ? "complete" : "partial",
+      coverage: { complete, confidence: complete ? "high" : "partial", message: complete ? "All imported transaction accounts cover this period." : "At least one imported transaction account does not cover this full period." },
+      openingPosition: { status: "unknown", reason: "A synchronized whole-person opening balance snapshot is unavailable for this month." },
+      transactionCount: period.length, moneyIn: cash.moneyIn, moneyOut: cash.moneyOut, rawCirculationIn: cash.circulationIn, rawCirculationOut: cash.circulationOut, netEconomicCashFlow: cash.net,
+      requiredCosts, normalizedMonthlyRequiredCost: fromCents(components.reduce((total, item) => total + toCents(item.normalizedMonthlyAmount), 0)), discretionarySpending,
+      availableMoney, availableMoneyPercentage: cash.moneyIn > 0 ? Math.round(toCents(availableMoney) / toCents(cash.moneyIn) * 10_000) / 100 : null,
+      availableMoneyChange: null, availableMoneyPercentageChange: null, rollingThreeMonthAverage: null,
+      wealthBuildingAllocation: null, remainingUnallocatedAvailableMoney: null, wealthAllocationRate: null,
+      discretionaryConsumptionRate: availableMoney > 0 ? Math.round(toCents(discretionarySpending) / toCents(availableMoney) * 10_000) / 100 : null,
+      transfers: cash.transfers, creditCardSettlements: cash.creditCardPayments, refunds, fees,
+      unknownPartial: { amount: sum(unknownItems), count: unknownItems.length }, requiredCostComponents: components,
+      byWorld, byCategory, topMerchants,
+      largestInflows: movements.inflows.map((item) => evidence(item, accountNames)),
+      largestOutflows: movements.outflows.map((item) => evidence(item, accountNames)),
+      trend: { comparable: false, moneyInChange: null, moneyInPercentageChange: null, requiredCostChange: null, availableMoneyChange: null, discretionaryChange: null, wealthAllocationChange: null, drivers: [] },
+    };
+    const previous = months.at(-1);
+    if (previous && previous.status === "complete" && current.status === "complete") {
+      current.availableMoneyChange = fromCents(toCents(current.availableMoney) - toCents(previous.availableMoney));
+      current.availableMoneyPercentageChange = percentChange(current.availableMoney, previous.availableMoney);
+      const worldChanges = current.byWorld.map((item) => ({ key: item.key, change: toCents(item.amount) - toCents(previous.byWorld.find((prior) => prior.key === item.key)?.amount ?? 0) }))
+        .sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 2).filter((item) => item.change !== 0);
+      current.trend = { comparable: true,
+        moneyInChange: fromCents(toCents(current.moneyIn) - toCents(previous.moneyIn)), moneyInPercentageChange: percentChange(current.moneyIn, previous.moneyIn),
+        requiredCostChange: fromCents(toCents(current.requiredCosts) - toCents(previous.requiredCosts)), availableMoneyChange: current.availableMoneyChange,
+        discretionaryChange: fromCents(toCents(current.discretionarySpending) - toCents(previous.discretionarySpending)), wealthAllocationChange: null,
+        drivers: worldChanges.map((item) => `${item.key} ${item.change > 0 ? "increased" : "decreased"} by ${fromCents(Math.abs(item.change)).toFixed(2)}`),
+      };
+    }
+    const comparable = [...months, current].filter((item) => item.status === "complete").slice(-3);
+    if (current.status === "complete" && comparable.length === 3) current.rollingThreeMonthAverage = fromCents(Math.round(comparable.reduce((total, item) => total + toCents(item.availableMoney), 0) / 3));
+    assertMonthReconciles(current);
+    months.push(current);
+  }
+  const total = (field: "moneyIn" | "moneyOut" | "netEconomicCashFlow" | "requiredCosts" | "availableMoney" | "discretionarySpending" | "transfers" | "creditCardSettlements" | "refunds" | "fees") =>
+    fromCents(months.reduce((sum, month) => sum + toCents(month[field]), 0));
+  const allMoneyIn = total("moneyIn"); const allMoneyOut = total("moneyOut");
+  void investmentSnapshots;
+  return { generatedThrough: endDate, startMonth, endMonth, months, all: {
+    transactionCount: months.reduce((sum, month) => sum + month.transactionCount, 0), moneyIn: allMoneyIn, moneyOut: allMoneyOut,
+    netEconomicCashFlow: total("netEconomicCashFlow"), requiredCosts: total("requiredCosts"), availableMoney: total("availableMoney"), discretionarySpending: total("discretionarySpending"),
+    transfers: total("transfers"), creditCardSettlements: total("creditCardSettlements"), refunds: total("refunds"), fees: total("fees"),
+    unknownPartial: { amount: fromCents(months.reduce((sum, month) => sum + toCents(month.unknownPartial.amount), 0)), count: months.reduce((sum, month) => sum + month.unknownPartial.count, 0) },
+    byWorld: mergeBreakdowns(months, "byWorld", allMoneyIn, allMoneyOut), byCategory: mergeBreakdowns(months, "byCategory", allMoneyIn, allMoneyOut),
+  } };
+};
+
+export type GoalIntention = { id: string; name: string; kind: "emergency-fund" | "car" | "home" | "vacation" | "education" | "retirement" | "custom"; assetAccountId: string; assignedAmount: number };
+export const validateGoalIntentions = (intentions: readonly GoalIntention[], assetBalances: ReadonlyMap<string, number>) => {
+  const assigned = new Map<string, number>();
+  for (const intention of intentions) assigned.set(intention.assetAccountId, fromCents((toCents(assigned.get(intention.assetAccountId) ?? 0) + toCents(intention.assignedAmount))));
+  return { valid: [...assigned].every(([accountId, value]) => value >= 0 && value <= (assetBalances.get(accountId) ?? -1)), assignedByAccount: assigned };
+};
+export const emergencyFundTarget = (chosenMonths: number, normalizedMonthlyRequiredCost: number) => {
+  if (!Number.isInteger(chosenMonths) || chosenMonths <= 0) return null;
+  return fromCents(toCents(normalizedMonthlyRequiredCost) * chosenMonths);
+};

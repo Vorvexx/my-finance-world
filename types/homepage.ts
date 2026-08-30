@@ -1,6 +1,7 @@
 export type HomepageMoney = { status: "known"; amount: number } | { status: "unknown"; reason: string };
 import type { FinancialPeriodKey } from "../lib/homepage/financial-period.ts";
 import type { BrowserReviewSuggestion } from "./review-interface.ts";
+import type { HistoricalFinancialFlow } from "../lib/analytics/monthly-financial-flow.ts";
 
 export type HomepageActivity = {
   viewKey: string;
@@ -178,6 +179,7 @@ export type HomepageViewModel = {
     message: string;
   };
   attention: { genuinelyUnknownCount: number; intentionallyDeferredCount: number; categoryAmbiguityCount: number };
+  analytics: HistoricalFinancialFlow | null;
   assistantSummary: readonly string[];
   insights: readonly HomepageInsight[];
 };

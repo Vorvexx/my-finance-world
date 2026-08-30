@@ -13,13 +13,14 @@ import {
 import type { ImportJournalRecord } from "../types/imports.ts";
 import type { CanonicalInvestmentSnapshot } from "../types/investments.ts";
 import type { CanonicalTransaction, FinancialMeaning } from "../types/transactions.ts";
+import { buildHistoricalFinancialFlow, emergencyFundTarget, validateGoalIntentions } from "../lib/analytics/monthly-financial-flow.ts";
 
-const transaction = ({ id, date, amount, direction = "outflow", meaning, category = null, world = null, accountId = "cash" }: {
+const transaction = ({ id, date, amount, direction = "outflow", meaning, category = null, world = null, accountId = "cash", counterparty = id }: {
   id: string; date: string; amount: number; direction?: "inflow" | "outflow"; meaning: FinancialMeaning;
-  category?: string | null; world?: CanonicalTransaction["attribution"]["world"]; accountId?: string;
+  category?: string | null; world?: CanonicalTransaction["attribution"]["world"]; accountId?: string; counterparty?: string;
 }): CanonicalTransaction => ({
   id, accountId, transactionDate: date, postedDate: null, amount, direction, currency: "CAD", rawDescription: id,
-  normalizedCounterparty: id.toUpperCase(), financialMeaning: meaning, status: "posted", relatedTransactionId: null,
+  normalizedCounterparty: counterparty.toUpperCase(), financialMeaning: meaning, status: "posted", relatedTransactionId: null,
   attribution: { world, category, method: category ? "user-correction" : "unclassified", ruleId: null, confidence: category ? 1 : null, correctedAt: null },
   provenance: { importId: `import-${id}`, providerId: "td", sourceRecordId: null, sourceKind: "import", observedAt: "2026-08-01T00:00:00Z", sourceUpdatedAt: null, fingerprint: { version: "v1", value: id }, deduplicationKey: id },
   createdAt: "2026-08-01T00:00:00Z", updatedAt: "2026-08-01T00:00:00Z",
@@ -87,4 +88,49 @@ test("statement coverage merges overlaps and exposes real gaps", () => {
   assert.equal(coverage.gapCount, 1);
   assert.equal(coverage.selectedPeriodCovered, true);
   assert.deepEqual(coverage.accounts[0].gaps, [{ startDate: "2026-02-16", endDate: "2026-02-28" }]);
+});
+
+test("monthly financial flow is historical, coverage-aware, reconciled, and future-safe", () => {
+  const imported = (id: string): ImportJournalRecord => ({
+    importId: id, sourceSha256: id, providerId: "td", accountType: "chequing", accountId: "cash", parserVersion: "v1",
+    statementPeriodStart: "2024-10-01", statementPeriodEnd: "2025-01-31", sourceFormat: "pdf", receivedAt: "2025-02-01T00:00:00Z",
+    processingStartedAt: null, proposedAt: null, committedAt: "2025-02-01T00:00:00Z", status: "committed", parsedTransactionCount: 9,
+    committedTransactionCount: 9, duplicateTransactionCount: 0, safeErrorCode: null, schemaVersion: 1,
+  });
+  const items = [
+    transaction({ id: "oct-rent", date: "2024-10-01", amount: 1000, meaning: "expense", category: "Rent", world: "home", counterparty: "Landlord" }),
+    transaction({ id: "nov-rent", date: "2024-11-01", amount: 1000, meaning: "expense", category: "Rent", world: "home", counterparty: "Landlord" }),
+    transaction({ id: "dec-rent", date: "2024-12-01", amount: 1000, meaning: "expense", category: "Rent", world: "home", counterparty: "Landlord" }),
+    transaction({ id: "dec-pay", date: "2024-12-05", amount: 5000, direction: "inflow", meaning: "income", category: "Salary", world: "income" }),
+    transaction({ id: "dec-food", date: "2024-12-10", amount: 200, meaning: "expense", category: "Groceries", world: "cash" }),
+    transaction({ id: "dec-card", date: "2024-12-15", amount: 800, meaning: "credit-card-payment", world: "creditDebt" }),
+    transaction({ id: "jan-rent", date: "2025-01-01", amount: 1100, meaning: "expense", category: "Rent", world: "home", counterparty: "Landlord" }),
+    transaction({ id: "jan-pay", date: "2025-01-05", amount: 5000, direction: "inflow", meaning: "income", category: "Salary", world: "income" }),
+    transaction({ id: "jan-dining", date: "2025-01-10", amount: 300, meaning: "expense", category: "Dining", world: "cash" }),
+    transaction({ id: "jan-tax", date: "2025-01-12", amount: 100, meaning: "fee", category: "Property Tax", world: "home" }),
+    transaction({ id: "jan-refund", date: "2025-01-11", amount: 50, direction: "inflow", meaning: "refund", category: "Dining", world: "cash" }),
+  ];
+  const timeline = buildHistoricalFinancialFlow({ transactions: items, imports: [imported("coverage")], investmentSnapshots: [], accountNames: new Map([["cash", "Cash"]]), endDate: "2025-01-31" });
+  assert.equal(timeline.months.length, 2);
+  assert.deepEqual(timeline.months.map((month) => [month.month, month.status, month.moneyIn, month.moneyOut, month.requiredCosts, month.availableMoney]), [
+    ["2024-12", "complete", 5000, 1200, 1000, 4000], ["2025-01", "complete", 5050, 1500, 1200, 3850],
+  ]);
+  assert.equal(timeline.months[1].availableMoneyPercentageChange, -3.75);
+  assert.equal(timeline.months[0].creditCardSettlements, 800);
+  assert.equal(timeline.months[0].requiredCostComponents[0].evidenceCount, 3);
+  assert.equal(timeline.months[0].requiredCostComponents[0].supportingTransactions.some((item) => item.date > "2024-12-31"), false);
+  assert.equal(timeline.months[1].byWorld.find((item) => item.key === "Home")?.amount, 1200);
+  assert.equal(timeline.months[1].fees, 0);
+  assert.equal(timeline.months[1].byWorld.reduce((sum, item) => sum + Math.round(item.amount * 100), 0), 145000);
+  assert.equal(timeline.all.transactionCount, 9);
+  assert.equal(timeline.all.creditCardSettlements, 800);
+});
+
+test("goal intentions remain metadata and require an explicit emergency-fund horizon", () => {
+  assert.deepEqual(validateGoalIntentions([
+    { id: "one", name: "Emergency Fund", kind: "emergency-fund", assetAccountId: "cash", assignedAmount: 3000 },
+    { id: "two", name: "Vacation", kind: "vacation", assetAccountId: "cash", assignedAmount: 1000 },
+  ], new Map([["cash", 5000]])).valid, true);
+  assert.equal(emergencyFundTarget(6, 1250), 7500);
+  assert.equal(emergencyFundTarget(0, 1250), null);
 });

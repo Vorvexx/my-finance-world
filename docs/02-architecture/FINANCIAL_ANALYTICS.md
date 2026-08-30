@@ -31,6 +31,14 @@ Reusable analytics derive from the effective canonical read model produced by `l
 - genuinely Unknown, intentionally deferred, category ambiguity, attribution, and date-range quality metrics;
 - per-account statement coverage, merged overlaps, gaps, and selected-period coverage.
 
+`lib/analytics/monthly-financial-flow.ts` is the canonical historical allocation dataset. It produces one fail-closed integer-cent timeline from December 2024 through the latest canonical transaction date and is consumed by both the Founder application and `/api/analytics`. Each month keeps economic cash flow separate from raw circulation and discloses Required Costs, Available Money, World/category/merchant allocations, refunds, fees, movements, Unknown/Partial evidence, coverage, and traceable trend drivers.
+
+Required Costs include canonically explicit fixed obligations (for example mortgage, rent, property tax, insurance, or vehicle payments) in the month they occur. Other necessities require at least three cadence-consistent historical observations available by that month. Repetition alone is insufficient: discretionary categories are not promoted to required costs. The model exposes actual required transactions for each month separately from the normalized monthly burden and equivalent biweekly burden.
+
+Available Money means `Money In − actual Required Costs`; it is neither account balance nor a claim about savings. Month-over-month comparisons require complete coverage for both months. Whole-person opening position and verified wealth-building rates remain Unknown when synchronized balance, contribution, or principal evidence is absent.
+
+Goal/Dream intentions are metadata over an existing asset account and do not create another balance. Emergency-fund targets require an explicit Founder-selected number of months; Vorvex does not impose a default horizon.
+
 ## Requires more source data
 
 - chequing and liability balance history beyond current canonical balances and credit-card statement balances;

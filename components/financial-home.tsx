@@ -31,6 +31,23 @@ const moneyLabel = (value: HomepageMoney, currency: string) => value.status === 
   ? formatMoney(value.amount, currency)
   : "Unavailable";
 
+function FinancialFlowAnalytics({ view }: { view: HomepageViewModel }) {
+  const timeline = view.analytics;
+  if (!timeline) return <section className="financial-hud__expanded-evidence"><h3>Financial flow history</h3><p>Canonical analytics are unavailable on this device.</p></section>;
+  const selected = timeline.months.find((month) => month.month === view.period.startDate.slice(0, 7)) ?? timeline.months.at(-1);
+  if (!selected) return null;
+  const percentage = selected.availableMoneyPercentageChange === null ? "Not comparable" : `${selected.availableMoneyPercentageChange >= 0 ? "+" : ""}${selected.availableMoneyPercentageChange.toFixed(1)}%`;
+  return <section className="financial-hud__expanded-evidence flow-analytics">
+    <h3>Money In → Required Costs → Available Money</h3>
+    <dl className="flow-now"><div><dt>Money In</dt><dd>{formatMoney(selected.moneyIn, view.currency)}</dd></div><div><dt>Required Costs</dt><dd>{formatMoney(selected.requiredCosts, view.currency)}</dd></div><div><dt>Available Money</dt><dd>{formatMoney(selected.availableMoney, view.currency)}</dd></div><div><dt>Month over month</dt><dd>{percentage}</dd></div></dl>
+    <small>{selected.coverage.message} Opening whole-person position remains {selected.openingPosition.status === "unknown" ? "Unknown" : "known"}.</small>
+    <details><summary>Required Cost evidence · normalized {formatMoney(selected.normalizedMonthlyRequiredCost, view.currency)}</summary>{selected.requiredCostComponents.length ? <ul className="activity-stream">{selected.requiredCostComponents.map((component) => <li key={component.key}><span><strong>{component.label}</strong><small>{component.kind} · {component.cadence} · {component.confidence} · {component.evidenceCount} observations</small></span><b>{formatMoney(component.normalizedMonthlyAmount, view.currency)}</b></li>)}</ul> : <p>No sufficiently supported recurring necessities yet.</p>}</details>
+    <details><summary>Where the money went</summary><dl>{selected.byWorld.map((item) => <div key={item.key}><dt>{item.key}</dt><dd>{formatMoney(item.amount, view.currency)} · {item.percentageOfOutflow === null ? "n/a" : `${item.percentageOfOutflow.toFixed(1)}%`} of outflow</dd></div>)}</dl><h3>Categories</h3><dl>{selected.byCategory.slice(0, 12).map((item) => <div key={item.key}><dt>{item.key}</dt><dd>{formatMoney(item.amount, view.currency)}</dd></div>)}</dl></details>
+    <details><summary>Monthly history · Dec 2024 to latest</summary><dl>{timeline.months.map((month) => <div key={month.month}><dt>{month.month} · {month.status}</dt><dd>In {formatMoney(month.moneyIn, view.currency)} · Out {formatMoney(month.moneyOut, view.currency)} · Available {formatMoney(month.availableMoney, view.currency)} · {month.availableMoneyPercentageChange === null ? "MoM n/a" : `${month.availableMoneyPercentageChange >= 0 ? "+" : ""}${month.availableMoneyPercentageChange.toFixed(1)}% MoM`}</dd></div>)}</dl></details>
+    <small>Verified wealth allocation remains Unknown where transfers, principal, or contributions cannot be linked factually. Transfers and card settlements are excluded from economic spending.</small>
+  </section>;
+}
+
 function WorldDetail({ world, view }: { world: NavigationWorldKey; view: HomepageViewModel }) {
   const currency = view.currency;
   if (world === "cash") {
@@ -41,6 +58,7 @@ function WorldDetail({ world, view }: { world: NavigationWorldKey; view: Homepag
       <h2>Position and movement</h2>
       <div className="pnn-grid"><section className="ranked-past"><p>Past · biggest movements</p><ActivityList title="Top Money In" items={view.cashflow.topInflows} currency={currency} empty="No supported inflows." /><ActivityList title="Top Money Out" items={view.cashflow.topOutflows} currency={currency} empty="No supported outflows." /></section><section><p>Now · {view.period.displayLabel}</p><dl className="flow-now"><div><dt>Money In</dt><dd>{moneyLabel(view.cashflow.moneyIn, currency)}</dd></div><div><dt>Money Out</dt><dd>{moneyLabel(view.cashflow.moneyOut, currency)}</dd></div><div><dt>Net movement</dt><dd>{moneyLabel(view.cashflow.net, currency)}</dd></div></dl><small>Cash position {moneyLabel(view.cash.total, currency)} · recorded {view.snapshotDate ?? "date Unknown"}</small></section><section><p>Next · ranked impact</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.certainty === "known" ? formatMoney(item.amount, currency) : `~${formatMoney(item.amount, currency)}`} · {item.date}</small></span>)}{upcoming.length === 0 && <small>Nothing known or strongly expected yet.</small>}</section></div>
       <section className="account-transaction-groups financial-hud__expanded-evidence"><ActivityList title="Recorded income · all imported coverage" items={view.cash.incomeHistory} currency={currency} empty="No supported income is recorded." /><ActivityList title="Still uncertain · all imported coverage" items={view.cash.uncertainHistory} currency={currency} empty="No genuinely uncertain Cash activity remains." /></section>
+      <FinancialFlowAnalytics view={view} />
     </>;
   }
   if (world === "investments") return <>
