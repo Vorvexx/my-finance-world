@@ -4,7 +4,7 @@
 
 Vorvex has one financial-model boundary. UI components consume the typed model exported by `lib/financial-model/canonical-financial-model.ts`; they do not own balances, financial totals, sample activity, or fallback financial constants.
 
-The recovered browser-localStorage payload remains private and ignored by Git. A read-only provider supplies it to the ingestion pipeline without committing personal financial information. The UI receives only the resulting canonical model and cannot distinguish whether a future model came from a local snapshot, manual input, an import, an API, or a database.
+The Founder runtime keeps a validated canonical account snapshot under owner-only Application Support storage. A read-only provider supplies it to the ingestion pipeline without committing personal financial information. Founder-managed factual overrides and additional accounts are applied through the validated local facts boundary. The UI receives only the resulting canonical model and does not depend on source format.
 
 ## Structure
 
@@ -15,11 +15,11 @@ Person
       ├── Accounts (authoritative ingested records)
       ├── Cash
       ├── Investments
-      ├── Home (unknown)
-      ├── Vehicle (asset value unknown; recovered loan appears in Credit / Debt)
+      ├── Home (Known, Partial, or Unknown from Founder facts and liabilities)
+      ├── Vehicle (Known, Partial, or Unknown from Founder facts and liabilities)
       ├── Credit / Debt
-      ├── Income (unknown)
-      ├── Upcoming (unknown)
+      ├── Income (derived from canonical transaction evidence)
+      ├── Upcoming (known statement obligations and evidence-based expectations)
       └── Future Worlds (unknown)
 ```
 
@@ -27,11 +27,10 @@ Known Worlds reference account IDs; they do not copy account records. Totals and
 
 ## Source and Privacy Boundary
 
-- Private source: `local-backups/financial-data/2026-08-07/my-finance-world-real-accounts-v1.json`
-- Source kind: recovered browser localStorage
-- Storage key: `my-finance-world-real-accounts-v1`
-- The entire `local-backups/` directory is ignored by Git.
-- The application remains local and performs no API, cloud, CSV, PDF, or network integration.
+- Production source: validated owner-local canonical snapshot and Founder facts under `~/Library/Application Support/Vorvex/`.
+- Transaction, statement-fact, investment-snapshot, review, and relationship payloads remain encrypted in owner-local stores.
+- Supported TD PDFs enter only through the Founder-controlled inbox boundary; the UI and financial model remain provider-independent.
+- The application performs no cloud, telemetry, external analytics, or network financial integration.
 
 ## Permanent Ingestion Boundary
 
@@ -59,11 +58,10 @@ The first provider reads the ignored local backup at runtime. When the file is a
 
 ## Remaining Unknowns
 
-- Home ownership, value, mortgage, and associated activity
-- Vehicle asset identity and value; only the recovered car-loan liability is known
-- Income and cash-flow history
-- Upcoming financial events
+- Historical account positions and whole-person net worth where synchronized balance evidence is absent
+- Home and Vehicle facts not explicitly supplied by the Founder or supported by canonical accounts
+- Future obligations beyond statement facts and evidence-labelled recurrence
+- DCP/PRPP history and contribution splits without source statements
 - Other and future Worlds
-- Browser profile and localhost-origin provenance for the recovered payload
 
 Unknown information must remain unknown until a person supplies an authoritative record.

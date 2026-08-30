@@ -79,7 +79,7 @@ The review interface is available only when the owner-controlled application pro
 
 ## Current limitations
 
-- The review interface intentionally has no batch editing, search, advanced filters, or rule editor. It now presents relationship candidates owned by the separate relationship boundary.
+- The review interface supports search, account/direction/date/World filters, explicit bulk selection, grouped/subset decisions, Review Later, Undo, Change, and relationship candidates. A general rule-administration interface remains unavailable.
 - Homepage loading invokes evaluation for its persisted canonical transactions before aggregation. The ingestion parsers and provider routing remain unchanged.
 - Legacy review relationship fields do not create transaction relationships; the dedicated relationship store is authoritative.
 - Rule matching is intentionally exact and account-scoped; aliases and merchant families require explicit future design.

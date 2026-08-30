@@ -23,6 +23,7 @@ This directory is Vorvex's durable source of company, product, architecture, dec
 - [Data Model](./02-architecture/DATA_MODEL.md) — Person → Worlds → Objects → Events → Money
 - [Canonical Transaction Ingestion](./02-architecture/TRANSACTION_INGESTION.md) — Provider-independent transaction boundary
 - [Homepage Financial View](./02-architecture/HOMEPAGE_FINANCIAL_VIEW.md) — Server-only aggregation and browser-safe homepage DTO
+- [Canonical Financial Analytics](./02-architecture/FINANCIAL_ANALYTICS.md) — Shared effective read model, reusable analytics, and evidence limits
 - [Human Review and Continuous Learning](./02-architecture/HUMAN_REVIEW_AND_LEARNING.md) — Durable uncertainty, confirmation, and reversible local learning
 - [Canonical Transaction Relationships](./02-architecture/TRANSACTION_RELATIONSHIPS.md) — Exact relationship candidates, Founder confirmation, and separate encrypted persistence
 - [Local Transaction Persistence](./02-architecture/LOCAL_TRANSACTION_PERSISTENCE.md) — Durable import journal, encrypted payloads, and local commit boundary

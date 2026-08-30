@@ -10,8 +10,9 @@ The homepage consumes one minimized server-side `HomepageViewModel`. UI componen
 
 ```text
 canonical account snapshot + encrypted local transaction store + local review rules + transaction relationships
-  → server-only loaders
-  → review evaluation overlay
+  → one effective canonical financial-data loader
+  → deterministic attribution + review/rule outcomes + relationship semantics
+  → shared financial analytics primitives
   → deterministic homepage aggregation
   → minimized homepage DTO
   → server-rendered homepage
@@ -26,7 +27,7 @@ Net worth is derived from canonical accounts as assets minus liabilities. Cash, 
 
 ## Activity semantics
 
-The initial homepage period is 30 inclusive calendar days. Qualifying spending includes canonical expense, credit-card purchase, fee, and interest meanings. Refunds and reversals reduce qualifying spending and never become income. Only canonical `income` contributes to qualifying income. Transfers, credit-card payments, cash deposits, cash withdrawals, and unknown meanings are excluded from spending and income totals.
+The Time Navigator uses one calendar-period vocabulary for Day, Week, Month, Quarter, Year, All, and Custom. Qualifying Money Out includes canonical expense, credit-card purchase, fee, and interest meanings. Money In includes income, refunds, and reversals; refunds remain distinguishable and reduce Lifestyle spending where applicable. Transfers, credit-card payments, cash deposits, cash withdrawals, and unknown meanings are excluded from primary cash-flow and spending totals while remaining visible as account circulation.
 
 This exclusion prevents a chequing-side card payment and credit-card-side payment credit from appearing as spending plus income before relationship matching exists. ATM withdrawals remain cash movement rather than assumed consumption.
 
@@ -42,7 +43,7 @@ The DTO omits canonical account and transaction IDs, account names and instituti
 
 The homepage is server-rendered and has no client-side database code, financial mutation, analytics, telemetry, or external model call. Local persistence is read only when `VORVEX_INGESTION_DATABASE_PATH` and a valid external 32-byte key (`VORVEX_INGESTION_KEY_PATH` or `VORVEX_INGESTION_KEY_BASE64`) are configured. Missing or invalid configuration fails privately to an unavailable activity state.
 
-The Vorvex Universe is a presentation layer over this same DTO. Its seven selectable Worlds remain on one page and use local UI state only to change focus. The component may format supplied values and select supplied recent items for display, but it does not derive balances, classify activity, match relationships, persist state, poll, or fetch another financial source. Account subtypes that are absent from the DTO—such as TFSA, RRSP, mortgage, or loan labels—remain explicitly unavailable rather than being inferred in the browser.
+The Vorvex Universe is a presentation layer over this same DTO. Current top-level navigation follows the approved five-World structure; Cashflow and liability remain canonical analytical/domain concepts projected contextually rather than duplicated top-level records. The component may format supplied values and select supplied recent items for display, but it does not derive balances, classify activity, match relationships, persist state, poll, or fetch another financial source.
 
 When `VORVEX_REVIEW_DATABASE_PATH` is also configured, the server evaluates the already-persisted canonical transactions against explicit corrections, learned rules, and engineering rules before aggregation. This is an in-memory read-model overlay: the import ledger is not rewritten and statements are not re-imported. A saved Founder classification invalidates the homepage and review routes, so Lifestyle, spending summaries, recent activity meaning, and assistant summary are rebuilt from the updated evaluation immediately.
 
@@ -52,7 +53,7 @@ When `VORVEX_RELATIONSHIP_DATABASE_PATH` is configured, the server applies persi
 
 - No account-balance synchronization from statement facts.
 - No fuzzy, merchant-based, or cross-person relationship matcher; uncertain or ambiguous exact pairs require review.
-- No interaction for changing the initial 30-day period.
-- The minimized DTO does not currently expose account-level investment or liability subtype labels, so those Universe objects cannot yet show factual subtype detail.
+- Historical whole-person net-worth and non-investment account-balance history remain unavailable because synchronized historical positions do not exist.
+- Recurring events are evidence-based expectations, not obligations or forecasts.
 - No network-host authentication layer; the review-capable application must remain within its owner-local host boundary unless a separate access-control design is approved.
 - The application host still needs protected key provisioning and durable ingestion-store configuration before imported activity appears in a normal local session.

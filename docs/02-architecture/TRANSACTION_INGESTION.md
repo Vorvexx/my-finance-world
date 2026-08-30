@@ -28,7 +28,7 @@ The production `td-chequing-pdf-v2` and `td-credit-card-pdf-v2` adapters convert
 
 The [Automatic Bank Statement Drop Folder](./STATEMENT_DROP_FOLDER.md) is the first production orchestration path. It detects stable local files, classifies document structure, selects a provider adapter, verifies an approved canonical account mapping, and invokes this same canonical boundary. Supported automatically: characterized TD Chequing PDF v2 statements, including a non-financial trailing page, and TD Credit Card PDF v2 statements with validated statement-page totals. No other bank-statement route is implied.
 
-For liability accounts, purchases, interest, and fees are outflows that increase debt; payments, refunds, and other credits are inflows that reduce debt. A credit-card payment is not categorized as spending. Cross-account payment matching is intentionally deferred: `relatedTransactionId` remains `null` until a later deterministic matcher can link the card payment to its chequing-side transfer without changing either transaction's identity.
+For liability accounts, purchases, interest, and fees are outflows that increase debt; payments, refunds, and other credits are inflows that reduce debt. A credit-card payment is not categorized as spending. Cross-account matching is owned by the separate encrypted [Canonical Transaction Relationships](./TRANSACTION_RELATIONSHIPS.md) boundary. It never rewrites transaction identity or relies on the legacy nullable `relatedTransactionId` field.
 
 ## Canonical Record
 
@@ -61,7 +61,7 @@ Category is separate contextual classification. It may be `null`: transfers and 
 
 ### Relationship capability
 
-`relatedTransactionId` may reference one other canonical Vorvex transaction. It is initially `null` and exists only to preserve a minimum future path for transfer, reversal, repayment, and related-event matching. Matching logic, multi-record relationships, receivables, reimbursements, and personal-loan objects are not implemented.
+`relatedTransactionId` remains a compatibility field and is not the active relationship authority. Confirmed relationships and their evidence live in the dedicated relationship store; canonical transaction rows remain unchanged.
 
 ## Provider Contract
 
