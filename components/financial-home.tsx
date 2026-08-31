@@ -68,10 +68,11 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
   const rows = monthSequence(firstMonth, lastMonth).reverse().map((month) => {
     const chequingMonth = chequingByMonth.get(month);
     const physical = physicalCash?.freshness.status === "known" && physicalCash.freshness.asOf.slice(0, 7) === month && physicalCash.balance.status === "known" ? physicalCash.balance.amount : null;
-    const investments = view.investments.accounts.map((account) => ({
-      account,
-      value: account.investmentHistory?.snapshots.findLast((snapshot) => snapshot.startDate.slice(0, 7) <= month && snapshot.date.slice(0, 7) >= month)?.value ?? null,
-    }));
+    const investments = view.investments.accounts.map((account) => {
+      const statementValue = account.investmentHistory?.snapshots.findLast((snapshot) => snapshot.startDate.slice(0, 7) <= month && snapshot.date.slice(0, 7) >= month)?.value ?? null;
+      const founderValue = /\bDCP\b|\bPRPP\b/i.test(account.displayName) && account.balance.status === "known" ? account.balance.amount : null;
+      return { account, value: statementValue ?? founderValue };
+    });
     const investmentValues = investments.map((item) => item.value);
     const investmentTotal = investmentValues.length > 0 && investmentValues.every((value) => value !== null)
       ? investmentValues.reduce<number>((total, value) => total + (value ?? 0), 0) : null;
@@ -101,7 +102,7 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
         {activeView === "accounts" && <><td>{amount(row.chequingEnd)}</td>{physicalCash && <td>{amount(row.physical)}</td>}{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}</>}
         <td><span className={row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "balance-evidence balance-evidence--known" : "balance-evidence"}>{row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "Recorded" : row.chequingMonth || row.investments.some((item) => item.value !== null) ? "Partial" : "Unknown"}</span></td>
       </tr>)}</tbody></table></div>
-    <small className="balance-history__note">Chequing is reconstructed to the exact calendar-month opening and close from reconciled statements and canonical transactions. Each investment statement ending value is shown throughout every month covered by that statement period; it is not a separately observed monthly valuation. Physical cash appears only on its dated Founder fact. Unknown is never treated as zero, and investment movement is not labelled as return.</small>
+    <small className="balance-history__note">Chequing is reconstructed to the exact calendar-month opening and close from reconciled statements and canonical transactions. Each TFSA/RRSP statement ending value is shown throughout every month covered by that statement period; it is not a separately observed monthly valuation. DCP and PRPP use their known Founder account balances throughout all displayed months. Physical cash appears only on its dated Founder fact. Unknown is never treated as zero, and investment movement is not labelled as return.</small>
   </section>;
 }
 
