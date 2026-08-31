@@ -2,7 +2,7 @@ import "server-only";
 
 import { existsSync } from "node:fs";
 import path from "node:path";
-import type { CanonicalStatementFacts } from "../../types/imports.ts";
+import type { CanonicalChequingStatementFacts, CanonicalStatementFacts } from "../../types/imports.ts";
 import type { ImportJournalRecord } from "../../types/imports.ts";
 import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
 import type { CanonicalTransaction } from "../../types/transactions.ts";
@@ -12,6 +12,7 @@ import { LocalIngestionStore } from "./local-ingestion-store.ts";
 export type PersistedFinancialSources = {
   transactions: readonly CanonicalTransaction[];
   statementFacts: readonly CanonicalStatementFacts[];
+  chequingStatementFacts: readonly CanonicalChequingStatementFacts[];
   imports: readonly ImportJournalRecord[];
   investmentSnapshots: readonly CanonicalInvestmentSnapshot[];
 };
@@ -30,6 +31,7 @@ export const loadPersistedFinancialSources = (accountIds: readonly string[]): Pe
     return {
       transactions: accountIds.flatMap((accountId) => store!.getTransactionsByAccount(accountId)),
       statementFacts: accountIds.flatMap((accountId) => store!.getStatementFactsByAccount(accountId)),
+      chequingStatementFacts: accountIds.flatMap((accountId) => store!.getChequingStatementFactsByAccount(accountId)),
       imports: store.getImportHistory().filter((record) => record.status === "committed"),
       investmentSnapshots: accountIds.flatMap((accountId) => store!.getInvestmentSnapshots(accountId)),
     };

@@ -28,6 +28,7 @@ export const loadCanonicalFinancialData = async (evaluatedAt = new Date()) => {
     transactions: relationships?.transactions ?? null,
     visibleTransactions: relationships?.transactions.filter((transaction) => !relationships.suppressedActivityTransactionIds.has(transaction.id)) ?? null,
     statementFacts: persisted?.statementFacts ?? null,
+    chequingStatementFacts: persisted?.chequingStatementFacts ?? null,
     imports: persisted?.imports ?? null,
     investmentSnapshots: persisted?.investmentSnapshots ?? null,
     suppressedActivityTransactionIds: relationships?.suppressedActivityTransactionIds ?? new Set<string>(),

@@ -128,6 +128,7 @@ export type TdChequingParsedStatement = {
   };
   openingBalanceCents: number;
   closingBalanceCents: number;
+  closingBalanceEvidence?: "statement-label" | "reconciled-final-running-balance";
   totalWithdrawalsCents: number;
   totalDepositsCents: number;
   transactions: TdChequingParsedTransaction[];

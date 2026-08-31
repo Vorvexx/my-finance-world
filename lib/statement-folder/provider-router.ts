@@ -31,7 +31,13 @@ const tdChequingRoute: StatementRoute = {
   accountType: "chequing",
   async recognizes(source) {
     const analysis = await analyzeValidatedTdChequingPdf(source);
-    return analysis.status === "recognized" && analysis.tdMarkerDetected;
+    if (analysis.status === "recognized" && analysis.tdMarkerDetected) return true;
+    try {
+      await parseTdChequingPdf({ source, importContext: { importId: "statement-recognition" } });
+      return true;
+    } catch {
+      return false;
+    }
   },
   async importStatement({ source, importId, accountId, store, committedAt }) {
     const parsed = await parseTdChequingPdf({ source, importContext: { importId } });

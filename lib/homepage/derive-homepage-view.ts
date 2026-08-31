@@ -1,5 +1,5 @@
 import type { CanonicalFinancialModel } from "../../types/finance.ts";
-import type { CanonicalStatementFacts } from "../../types/imports.ts";
+import type { CanonicalChequingStatementFacts, CanonicalStatementFacts } from "../../types/imports.ts";
 import type { ImportJournalRecord } from "../../types/imports.ts";
 import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
 import type { HomepageAccount, HomepageActivity, HomepageMoney, HomepageViewModel } from "../../types/homepage.ts";
@@ -16,6 +16,7 @@ import {
 } from "../analytics/financial-analytics.ts";
 import { economicMeaningFor } from "../financial-model/economic-semantics.ts";
 import { buildHistoricalFinancialFlow } from "../analytics/monthly-financial-flow.ts";
+import { buildChequingStatementHistory } from "../analytics/chequing-statement-history.ts";
 import { resolveFinancialPeriod, type FinancialPeriodKey } from "./financial-period.ts";
 import { detectMissingExpectedEvents, detectRecurringPatterns } from "./recurring-patterns.ts";
 
@@ -23,6 +24,7 @@ export type HomepageFinancialSources = {
   model: CanonicalFinancialModel;
   transactions: readonly CanonicalTransaction[] | null;
   statementFacts: readonly CanonicalStatementFacts[] | null;
+  chequingStatementFacts?: readonly CanonicalChequingStatementFacts[] | null;
   imports?: readonly ImportJournalRecord[] | null;
   investmentSnapshots?: readonly CanonicalInvestmentSnapshot[] | null;
   asOfDate: string;
@@ -114,6 +116,7 @@ export const deriveHomepageView = ({
   model,
   transactions,
   statementFacts,
+  chequingStatementFacts = null,
   imports = null,
   investmentSnapshots = null,
   asOfDate,
@@ -396,6 +399,10 @@ export const deriveHomepageView = ({
   const coverageAnalytics = imports === null ? null : statementCoverage(imports, accountNames, analyticsRange);
   const coverageGaps = coverageAnalytics?.accounts.flatMap((account) => account.gaps.map((gap) => ({ accountName: account.accountName, ...gap }))) ?? [];
   const selectedPeriodCovered = coverageAnalytics?.selectedPeriodCovered === true;
+  const historicalStartMonth = chequingStatementFacts?.reduce<string | null>((oldest, fact) => {
+    const month = fact.statementPeriodStart.slice(0, 7);
+    return oldest === null || month < oldest ? month : oldest;
+  }, null) ?? "2024-12";
   const historicalAnalytics = transactions !== null && imports !== null
     ? buildHistoricalFinancialFlow({
         transactions: visibleHistoryTransactions,
@@ -404,6 +411,7 @@ export const deriveHomepageView = ({
         accountNames,
         genuinelyUnknownIds: genuinelyUnknownTransactionIds ?? new Set(),
         intentionallyDeferredIds: deferredReviewTransactionIds,
+        startMonth: historicalStartMonth,
         endDate: allDates.at(-1) && allDates.at(-1)! < asOfDate ? allDates.at(-1)! : asOfDate,
       })
     : null;
@@ -418,6 +426,7 @@ export const deriveHomepageView = ({
   else if (expectedUpcoming[0]) assistantSummary.push(`A recurring movement is expected around ${expectedUpcoming[0].date}.`);
 
   const cashAccounts = model.accountsByWorld.cash;
+  const chequingStatementHistory = buildChequingStatementHistory(chequingStatementFacts ?? []);
   const investmentAccounts = model.accountsByWorld.investments;
   const investmentSnapshotGroups = new Map<string, CanonicalInvestmentSnapshot[]>();
   for (const snapshot of investmentSnapshots ?? []) investmentSnapshotGroups.set(snapshot.accountId, [...(investmentSnapshotGroups.get(snapshot.accountId) ?? []), snapshot]);
@@ -468,6 +477,7 @@ export const deriveHomepageView = ({
       uncertainHistory: visibleHistoryTransactions.filter(genuinelyUnknown)
         .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
         .map((transaction, index) => activityView(transaction, `cash-uncertain-history-${index + 1}`)),
+      statementHistory: chequingStatementHistory,
     },
     investments: {
       total: positionAvailable && model.totalsByWorld.investments !== null ? money(model.totalsByWorld.investments) : unknown("Investment balance is unavailable."),

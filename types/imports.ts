@@ -47,6 +47,25 @@ export type PreparedCanonicalTransaction = {
 export type PreparedTdChequingImport = {
   journal: ImportJournalRecord;
   transactions: readonly PreparedCanonicalTransaction[];
+  chequingStatementFacts: CanonicalChequingStatementFacts;
+};
+
+export type CanonicalChequingStatementFacts = {
+  id: string;
+  importId: string;
+  accountId: string;
+  providerId: "td";
+  accountType: "chequing";
+  currency: "CAD";
+  statementPeriodStart: string;
+  statementPeriodEnd: string;
+  openingBalanceCents: number;
+  totalDepositsCents: number;
+  totalWithdrawalsCents: number;
+  closingBalanceCents: number;
+  closingBalanceEvidence: "statement-label" | "reconciled-final-running-balance";
+  sourceSha256: string;
+  createdAt: string;
 };
 
 export type CanonicalStatementFacts = {

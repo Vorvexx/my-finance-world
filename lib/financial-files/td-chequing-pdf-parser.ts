@@ -45,6 +45,7 @@ const IMPORT_ID = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/;
 const MASKED_REFERENCE_AT_END = /(?:^|\s)((?:\*{3}|X{2,})[A-Z0-9-]+)$/i;
 const COLUMN_MAX_DISTANCE = 28;
 const COLUMN_MIN_SEPARATION = 8;
+const PDF_FRAGMENT_JOIN_DISTANCE = 1;
 
 export class TdChequingParserError extends Error {
   readonly code: Extract<FinancialFileErrorCode,
@@ -112,7 +113,17 @@ const groupIntoLines = (items: readonly PositionedText[]): readonly TextLine[] =
   }
   return groups.map((group) => {
     const ordered = group.sort((a, b) => a.x - b.x);
-    return { text: ordered.map((item) => item.text).join(" "), items: ordered };
+    const reconstructed: PositionedText[] = [];
+    for (const item of ordered) {
+      const previous = reconstructed.at(-1);
+      if (previous && item.x - previous.right <= PDF_FRAGMENT_JOIN_DISTANCE) {
+        previous.text += item.text;
+        previous.right = Math.max(previous.right, item.right);
+      } else {
+        reconstructed.push({ ...item });
+      }
+    }
+    return { text: reconstructed.map((item) => item.text).join(" "), items: reconstructed };
   });
 };
 
@@ -125,7 +136,13 @@ const isoDate = (year: number, month: number, day: number): string | null => {
 };
 
 const parseStatementPeriod = (text: string, pdfCreationDate: string | null): StatementPeriod => {
-  const matches = [...text.matchAll(STATEMENT_PERIOD)];
+  const normalizedText = text.replace(
+    new RegExp(`\\b(${MONTH_PATTERN})\\s+(\\d{1,2})/(\\d{2})\\b`, "gi"),
+    (_match, month: string, day: string, year: string) => `${month} ${day}, 20${year}`,
+  );
+  const allMatches = [...normalizedText.matchAll(STATEMENT_PERIOD)];
+  const datedMatches = allMatches.filter((match) => Boolean(match[3] || match[7]));
+  const matches = datedMatches.length > 0 ? datedMatches : allMatches;
   if (matches.length !== 1) {
     throw new TdChequingParserError("TD_CHEQUING_STATEMENT_PERIOD_INVALID");
   }
@@ -301,39 +318,52 @@ const parseLines = ({
     .map((line, index) => /\bSTARTING\s+BALANCE\b/i.test(line.text) ? index : -1)
     .filter((index) => index > headerIndex);
   const closingIndexes = lines
-    .map((line, index) => /\bCLOSING\s+BALANCE\b/i.test(line.text) ? index : -1)
+    .map((line, index) => (
+      /\bCLOSING\s+BALANCE\b/i.test(line.text)
+      && line.items.filter((item) => MONEY.test(item.text)).length === 1
+    ) ? index : -1)
     .filter((index) => index > headerIndex);
-  if (startingIndexes.length !== 1 || closingIndexes.length !== 1) {
+  if (startingIndexes.length !== 1 || closingIndexes.length > 1) {
     throw new TdChequingParserError("TD_CHEQUING_STRUCTURE_NOT_RECOGNIZED");
   }
   const startingIndex = startingIndexes[0];
-  const closingIndex = closingIndexes[0];
-  if (startingIndex !== headerIndex + 1 || closingIndex <= startingIndex + 1) {
+  const closingIndex = closingIndexes[0] ?? null;
+  if (startingIndex !== headerIndex + 1 || (closingIndex !== null && closingIndex <= startingIndex + 1)) {
     throw new TdChequingParserError("TD_CHEQUING_STRUCTURE_NOT_RECOGNIZED");
   }
 
   const totalsIndexes = lines
-    .map((line, index) => /^\s*TOTALS?\b/i.test(line.text) ? index : -1)
-    .filter((index) => index > closingIndex);
-  if (totalsIndexes.length !== 1 || totalsIndexes[0] !== closingIndex + 1) {
+    .map((line, index) => (
+      /^\s*TOTALS?\b/i.test(line.text)
+      || (
+        line.items.filter((item) => MONEY.test(item.text)).length === 2
+        && line.items.every((item) => MONEY.test(item.text))
+      )
+    ) ? index : -1)
+    .filter((index) => index > (closingIndex ?? startingIndex));
+  if (
+    totalsIndexes.length !== 1
+    || (closingIndex !== null && totalsIndexes[0] !== closingIndex + 1)
+    || (closingIndex === null && totalsIndexes[0] <= startingIndex + 1)
+  ) {
     throw new TdChequingParserError("TD_CHEQUING_STRUCTURE_NOT_RECOGNIZED");
   }
   const totalsIndex = totalsIndexes[0];
+  const transactionEndIndex = closingIndex ?? totalsIndex;
 
   const statementPeriod = parseStatementPeriod(allText, pdfCreationDate);
   const startingMoney = monetaryColumns(lines[startingIndex], resolvedColumns);
-  const closingMoney = monetaryColumns(lines[closingIndex], resolvedColumns);
+  const closingMoney = closingIndex === null ? null : monetaryColumns(lines[closingIndex], resolvedColumns);
   const totalsMoney = monetaryColumns(lines[totalsIndex], resolvedColumns);
-  if (startingMoney.size !== 1 || closingMoney.size !== 1 || totalsMoney.size !== 2) {
+  if (startingMoney.size !== 1 || (closingMoney !== null && closingMoney.size !== 1) || totalsMoney.size !== 2) {
     throw new TdChequingParserError("TD_CHEQUING_MONEY_INVALID");
   }
   const openingBalanceCents = requiredMoney(startingMoney, "balance");
-  const closingBalanceCents = requiredMoney(closingMoney, "balance");
   const totalWithdrawalsCents = requiredMoney(totalsMoney, "withdrawals");
   const totalDepositsCents = requiredMoney(totalsMoney, "deposits");
 
   const transactions: TdChequingParsedTransaction[] = [];
-  for (const [offset, line] of lines.slice(startingIndex + 1, closingIndex).entries()) {
+  for (const [offset, line] of lines.slice(startingIndex + 1, transactionEndIndex).entries()) {
     const dateItems = line.items.filter((item) => TRANSACTION_DATE.test(item.text));
     const moneyItems = line.items.filter((item) => MONEY.test(item.text));
     const descriptionItems = line.items.filter(
@@ -369,6 +399,9 @@ const parseLines = ({
   const calculatedClosingBalance = BigInt(openingBalanceCents)
     + BigInt(totalDepositsCents)
     - BigInt(totalWithdrawalsCents);
+  const closingBalanceCents = closingMoney === null
+    ? Number(calculatedClosingBalance)
+    : requiredMoney(closingMoney, "balance");
   if (
     calculatedClosingBalance < BigInt(0)
     || calculatedClosingBalance > BigInt(Number.MAX_SAFE_INTEGER)
@@ -390,6 +423,9 @@ const parseLines = ({
       }
     }
   }
+  if (closingMoney === null && transactions.at(-1)?.runningBalanceCents !== closingBalanceCents) {
+    throw new TdChequingParserError("TD_CHEQUING_RECONCILIATION_FAILED");
+  }
 
   return {
     parser: {
@@ -408,6 +444,7 @@ const parseLines = ({
     statementPeriod,
     openingBalanceCents,
     closingBalanceCents,
+    closingBalanceEvidence: closingMoney === null ? "reconciled-final-running-balance" : "statement-label",
     totalWithdrawalsCents,
     totalDepositsCents,
     transactions,
@@ -473,7 +510,7 @@ export const parseTdChequingPdf = async ({
     if (pages.every((items) => items.length === 0)) throw new TdChequingParserError("IMAGE_ONLY_PDF");
     const candidatePages = pages.filter((items) => {
       const text = groupIntoLines(items).map((line) => line.text).join("\n");
-      return /\bSTARTING\s+BALANCE\b/i.test(text) && /\bCLOSING\s+BALANCE\b/i.test(text)
+      return /\bSTARTING\s+BALANCE\b/i.test(text)
         && /Description.*Withdrawals.*Deposits.*Date.*Balance/i.test(text);
     });
     if (candidatePages.length !== 1) throw new TdChequingParserError("TD_CHEQUING_STRUCTURE_NOT_RECOGNIZED");

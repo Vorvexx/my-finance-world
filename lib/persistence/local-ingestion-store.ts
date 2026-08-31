@@ -8,6 +8,7 @@ import type {
   ImportJournalStatus,
   PreparedStatementImport,
   CanonicalStatementFacts,
+  CanonicalChequingStatementFacts,
 } from "../../types/imports.ts";
 import type { CanonicalTransaction } from "../../types/transactions.ts";
 import type { CanonicalInvestmentSnapshot } from "../../types/investments.ts";
@@ -43,6 +44,13 @@ type EncryptedStatementFactsPayload = {
   minimumPaymentCents: number;
   previousBalanceCents: number;
   newBalanceCents: number;
+};
+
+type EncryptedChequingStatementFactsPayload = {
+  openingBalanceCents: number;
+  totalDepositsCents: number;
+  totalWithdrawalsCents: number;
+  closingBalanceCents: number;
 };
 
 export type LocalIngestionErrorCode =
@@ -203,6 +211,27 @@ const schemaV4 = `
   CREATE INDEX investment_snapshots_account_period ON investment_snapshots(account_id, statement_period_end DESC);
 `;
 
+const schemaV5 = `
+  CREATE TABLE chequing_statement_facts (
+    statement_id TEXT PRIMARY KEY,
+    import_id TEXT NOT NULL UNIQUE REFERENCES import_journal(import_id),
+    account_id TEXT NOT NULL REFERENCES account_import_mappings(account_id),
+    provider_id TEXT NOT NULL,
+    account_type TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    statement_period_start TEXT NOT NULL,
+    statement_period_end TEXT NOT NULL,
+    closing_balance_evidence TEXT NOT NULL CHECK (closing_balance_evidence IN ('statement-label','reconciled-final-running-balance')),
+    source_sha256 TEXT NOT NULL,
+    encrypted_payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(account_id, provider_id, account_type, statement_period_start, statement_period_end),
+    UNIQUE(account_id, source_sha256)
+  ) STRICT;
+  CREATE INDEX chequing_statement_facts_account_period
+    ON chequing_statement_facts(account_id, statement_period_end DESC);
+`;
+
 const importFromRow = (row: SqlRow): ImportJournalRecord => ({
   importId: String(row.import_id),
   sourceSha256: String(row.source_sha256),
@@ -315,7 +344,7 @@ export class LocalIngestionStore {
       this.#database.exec("BEGIN IMMEDIATE");
       try {
         this.#database.exec(schemaV3);
-        this.#database.exec(`PRAGMA user_version = ${LOCAL_INGESTION_SCHEMA_VERSION}`);
+        this.#database.exec("PRAGMA user_version = 3");
         this.#database.exec("COMMIT");
         current = 3;
       } catch (error) {
@@ -327,6 +356,18 @@ export class LocalIngestionStore {
       this.#database.exec("BEGIN IMMEDIATE");
       try {
         this.#database.exec(schemaV4);
+        this.#database.exec("PRAGMA user_version = 4");
+        this.#database.exec("COMMIT");
+        current = 4;
+      } catch (error) {
+        this.#database.exec("ROLLBACK");
+        throw error;
+      }
+    }
+    if (current === 4) {
+      this.#database.exec("BEGIN IMMEDIATE");
+      try {
+        this.#database.exec(schemaV5);
         this.#database.exec(`PRAGMA user_version = ${LOCAL_INGESTION_SCHEMA_VERSION}`);
         this.#database.exec("COMMIT");
       } catch (error) {
@@ -617,6 +658,9 @@ export class LocalIngestionStore {
           );
         }
       }
+      if ("chequingStatementFacts" in prepared) {
+        this.saveChequingStatementFacts(prepared.chequingStatementFacts);
+      }
       this.#database.prepare(`
         UPDATE import_journal SET status = 'committed', committed_at = ?,
           committed_transaction_count = ?, duplicate_transaction_count = ?
@@ -673,6 +717,36 @@ export class LocalIngestionStore {
     return Number(this.#database.prepare(
       "SELECT COUNT(*) AS count FROM canonical_transactions",
     ).get()?.count);
+  }
+
+  saveChequingStatementFacts(facts: CanonicalChequingStatementFacts): "saved" | "duplicate" {
+    this.#assertOpen();
+    const existing = this.#database.prepare(`SELECT * FROM chequing_statement_facts
+      WHERE account_id = ? AND (source_sha256 = ? OR (statement_period_start = ? AND statement_period_end = ?)) LIMIT 1`).get(
+      facts.accountId, facts.sourceSha256, facts.statementPeriodStart, facts.statementPeriodEnd,
+    ) as SqlRow | undefined;
+    if (existing) {
+      const current = this.#chequingStatementFactsFromRow(existing);
+      if (
+        current.openingBalanceCents !== facts.openingBalanceCents
+        || current.totalDepositsCents !== facts.totalDepositsCents
+        || current.totalWithdrawalsCents !== facts.totalWithdrawalsCents
+        || current.closingBalanceCents !== facts.closingBalanceCents
+      ) throw new LocalIngestionError("IMPORT_PERSISTENCE_FAILED");
+      return "duplicate";
+    }
+    this.#database.prepare(`INSERT INTO chequing_statement_facts (
+      statement_id, import_id, account_id, provider_id, account_type, currency,
+      statement_period_start, statement_period_end, closing_balance_evidence,
+      source_sha256, encrypted_payload, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      facts.id, facts.importId, facts.accountId, facts.providerId, facts.accountType, facts.currency,
+      facts.statementPeriodStart, facts.statementPeriodEnd, facts.closingBalanceEvidence, facts.sourceSha256,
+      encryptJsonPayload({ openingBalanceCents: facts.openingBalanceCents, totalDepositsCents: facts.totalDepositsCents,
+        totalWithdrawalsCents: facts.totalWithdrawalsCents, closingBalanceCents: facts.closingBalanceCents }, this.#encryptionKey),
+      facts.createdAt,
+    );
+    return "saved";
   }
 
   #transactionFromRow(row: SqlRow): CanonicalTransaction {
@@ -758,6 +832,26 @@ export class LocalIngestionStore {
       newBalanceCents: payload.newBalanceCents,
       createdAt: String(row.created_at),
     };
+  }
+
+  #chequingStatementFactsFromRow(row: SqlRow): CanonicalChequingStatementFacts {
+    const payload = decryptJsonPayload<EncryptedChequingStatementFactsPayload>(
+      String(row.encrypted_payload), this.#encryptionKey,
+    );
+    return {
+      id: String(row.statement_id), importId: String(row.import_id), accountId: String(row.account_id),
+      providerId: "td", accountType: "chequing", currency: "CAD",
+      statementPeriodStart: String(row.statement_period_start), statementPeriodEnd: String(row.statement_period_end),
+      closingBalanceEvidence: String(row.closing_balance_evidence) as CanonicalChequingStatementFacts["closingBalanceEvidence"],
+      sourceSha256: String(row.source_sha256), createdAt: String(row.created_at), ...payload,
+    };
+  }
+
+  getChequingStatementFactsByAccount(accountId: string): readonly CanonicalChequingStatementFacts[] {
+    this.#assertOpen();
+    return (this.#database.prepare(`SELECT * FROM chequing_statement_facts
+      WHERE account_id = ? ORDER BY statement_period_end ASC, statement_id`).all(accountId) as SqlRow[])
+      .map((row) => this.#chequingStatementFactsFromRow(row));
   }
 
   getStatementFactsByAccount(accountId: string): readonly CanonicalStatementFacts[] {

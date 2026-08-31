@@ -8,7 +8,7 @@ import type { FinancialMeaning } from "../../types/transactions.ts";
 
 export const TD_TRANSACTION_FINGERPRINT_VERSION = "td-chequing-fingerprint-v1" as const;
 export const CANONICAL_TRANSACTION_ID_VERSION = "canonical-transaction-id-v1" as const;
-export const LOCAL_INGESTION_SCHEMA_VERSION = 4;
+export const LOCAL_INGESTION_SCHEMA_VERSION = 5;
 
 const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 
@@ -158,5 +158,25 @@ export const normalizeTdChequingStatement = ({
     schemaVersion: LOCAL_INGESTION_SCHEMA_VERSION,
   };
 
-  return { journal, transactions };
+  return {
+    journal,
+    transactions,
+    chequingStatementFacts: {
+      id: `vorvex-chequing-statement:${sha256(JSON.stringify([accountId, parsed.source.sha256]))}`,
+      importId: parsed.source.importId,
+      accountId,
+      providerId: parsed.parser.providerId,
+      accountType: parsed.parser.accountType,
+      currency: parsed.currency,
+      statementPeriodStart: parsed.statementPeriod.startDate,
+      statementPeriodEnd: parsed.statementPeriod.endDate,
+      openingBalanceCents: parsed.openingBalanceCents,
+      totalDepositsCents: parsed.totalDepositsCents,
+      totalWithdrawalsCents: parsed.totalWithdrawalsCents,
+      closingBalanceCents: parsed.closingBalanceCents,
+      closingBalanceEvidence: parsed.closingBalanceEvidence ?? "statement-label",
+      sourceSha256: parsed.source.sha256,
+      createdAt: receivedAt,
+    },
+  };
 };

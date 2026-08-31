@@ -30,6 +30,7 @@ export const ingestParsedTdChequingStatement = ({
 
   const existing = store.getImportStatus(prepared.journal.importId);
   if (existing && ["committed", "duplicate"].includes(existing.status)) {
+    if (existing.status === "committed") store.saveChequingStatementFacts({ ...prepared.chequingStatementFacts, importId: existing.importId });
     const receipt = store.getReceipt(existing.importId);
     if (!receipt) throw new LocalIngestionError("IMPORT_INVALID_STATE");
     return receipt;
@@ -38,7 +39,9 @@ export const ingestParsedTdChequingStatement = ({
     throw new LocalIngestionError("IMPORT_INVALID_STATE");
   }
 
-  if (!existing && store.findCommittedFileDuplicate(prepared.journal)) {
+  const committedDuplicate = !existing ? store.findCommittedFileDuplicate(prepared.journal) : null;
+  if (committedDuplicate) {
+    store.saveChequingStatementFacts({ ...prepared.chequingStatementFacts, importId: committedDuplicate.importId });
     return store.markFileDuplicate(prepared.journal, committedAt);
   }
 

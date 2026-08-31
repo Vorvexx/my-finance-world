@@ -12,6 +12,7 @@ export const loadHomepageView = async ({ asOfDate, periodKey, periodAnchor, cust
     model: data.model,
     transactions: data.transactions,
     statementFacts: data.statementFacts,
+    chequingStatementFacts: data.chequingStatementFacts,
     imports: data.imports,
     investmentSnapshots: data.investmentSnapshots,
     asOfDate: asOfDate ?? localDate,

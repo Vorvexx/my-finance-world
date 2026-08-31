@@ -18,12 +18,12 @@ export type MonthlyFinancialFlow = {
   month: string; startDate: string; endDate: string; status: "complete" | "partial";
   coverage: { complete: boolean; confidence: "high" | "partial"; message: string };
   openingPosition: { status: "known"; amount: number; date: string } | { status: "unknown"; reason: string };
-  transactionCount: number; moneyIn: number; moneyOut: number; rawCirculationIn: number; rawCirculationOut: number; netEconomicCashFlow: number;
+  transactionCount: number; moneyIn: number; regularIncome: number; nonRegularEconomicInflows: number; moneyOut: number; rawCirculationIn: number; rawCirculationOut: number; netEconomicCashFlow: number;
   observedRequiredCosts: number; requiredCostCoverage: { status: "sufficient" | "partial"; normalizationSufficient: boolean; normalizedMonthlyAmount: number | null; reason: string };
   discretionaryConsumption: number;
   availableToAllocate: number; availableToAllocatePercentage: number | null; availableToAllocateChange: number | null; availableToAllocatePercentageChange: number | null; rollingThreeMonthAverage: number | null;
-  verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; discretionaryConsumptionRate: number | null;
-  allocationBridge: { moneyIn: { amount: number; percentageOfMoneyIn: 100 | null }; observedRequired: { amount: number; percentageOfMoneyIn: number | null }; availableToAllocate: { amount: number; percentageOfMoneyIn: number | null }; discretionaryConsumption: { amount: number; percentageOfAvailableToAllocate: number | null }; verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; equation: string; reconciles: true };
+  verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; unallocatedMoney: EvidenceLimitedAmount; discretionaryConsumptionRate: number | null;
+  allocationBridge: { moneyIn: { amount: number; percentageOfMoneyIn: 100 | null }; nonRegularEconomicInflows: { amount: number; percentageOfMoneyIn: number | null }; observedRequired: { amount: number; percentageOfMoneyIn: number | null }; availableToAllocate: { amount: number; percentageOfMoneyIn: number | null }; discretionaryConsumption: { amount: number; percentageOfAvailableToAllocate: number | null }; verifiedWealthAllocation: EvidenceLimitedAmount; unknownAllocationResidual: EvidenceLimitedAmount; remainingAvailable: EvidenceLimitedAmount; unallocatedMoney: EvidenceLimitedAmount; equation: string; reconciles: true };
   transfers: number; creditCardSettlements: number; refunds: number; fees: number;
   unknownPartial: { amount: number; count: number };
   requiredCostComponents: readonly RequiredCostComponent[];
@@ -70,6 +70,9 @@ const explicitFixedObligation = (transaction: CanonicalTransaction) =>
 const isFinancialFee = (transaction: CanonicalTransaction) => /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? "")
   || ((transaction.financialMeaning === "fee" || transaction.financialMeaning === "interest")
     && transaction.attribution.world !== "home" && transaction.attribution.world !== "vehicle" && transaction.attribution.world !== "investments");
+const isNonRegularEconomicInflow = (transaction: CanonicalTransaction) => isRefund(transaction)
+  && (/rebate|cashback/i.test(transaction.attribution.category?.trim() ?? "")
+    || /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? ""));
 const identity = (transaction: CanonicalTransaction) => [transaction.accountId, transaction.normalizedCounterparty.trim().toLocaleUpperCase("en-CA"), transaction.attribution.category ?? "", transaction.attribution.world ?? ""].join("|");
 const evidence = (transaction: CanonicalTransaction, accountNames: ReadonlyMap<string, string>): AnalyticsEvidence => ({
   date: transaction.transactionDate, description: transaction.rawDescription, amount: transaction.amount,
@@ -130,12 +133,12 @@ const worldAllocation = (items: readonly CanonicalTransaction[], moneyIn: number
 const percentChange = (current: number, previous: number) => previous === 0 ? null : Math.round((current - previous) / Math.abs(previous) * 10_000) / 100;
 const assertMonthReconciles = (month: MonthlyFinancialFlow) => {
   const worldTotal = month.byWorld.reduce((sum, item) => sum + toCents(item.amount), 0);
-  const netEconomicOutflow = toCents(month.moneyOut) - toCents(month.refunds);
+  const netEconomicOutflow = toCents(month.moneyOut) - toCents(month.refunds) + toCents(month.nonRegularEconomicInflows);
   const hierarchyReconciles = month.byWorld.every((world) => world.categories.reduce((sum, item) => sum + toCents(item.amount), 0) === toCents(world.amount));
-  if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) - netEconomicOutflow
+  if (toCents(month.netEconomicCashFlow) !== toCents(month.moneyIn) + toCents(month.nonRegularEconomicInflows) - netEconomicOutflow
     || toCents(month.availableToAllocate) !== toCents(month.moneyIn) - toCents(month.observedRequiredCosts)
     || toCents(month.discretionaryConsumption) !== netEconomicOutflow - toCents(month.observedRequiredCosts)
-    || toCents(month.remainingAvailable.amount ?? month.unknownAllocationResidual.amount ?? 0) !== toCents(month.availableToAllocate) - toCents(month.discretionaryConsumption) - toCents(month.verifiedWealthAllocation.amount ?? 0)
+    || toCents(month.remainingAvailable.amount ?? month.unknownAllocationResidual.amount ?? 0) !== toCents(month.availableToAllocate) + toCents(month.nonRegularEconomicInflows) - toCents(month.discretionaryConsumption) - toCents(month.verifiedWealthAllocation.amount ?? 0)
     || toCents(month.observedRequiredCosts) > toCents(month.moneyOut)
     || worldTotal !== netEconomicOutflow || !hierarchyReconciles) {
     throw new Error(`FINANCIAL_FLOW_RECONCILIATION_FAILED:${month.month}`);
@@ -182,7 +185,9 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
       && (explicitFixedObligation(item) || componentKeys.has(identity(item))));
     const coverage = statementCoverage(imports, accountNames, range); const complete = coverage.selectedPeriodCovered === true;
     const unknownItems = period.filter((item) => genuinelyUnknownIds.has(item.id) || intentionallyDeferredIds.has(item.id) || (isPrimaryOutflow(item) && (!item.attribution.category || !item.attribution.world)));
-    const economic = period.filter((item) => isPrimaryOutflow(item) || isRefund(item));
+    const nonRegularEconomicInflowItems = period.filter(isNonRegularEconomicInflow);
+    const nonRegularEconomicInflows = sum(nonRegularEconomicInflowItems);
+    const economic = period.filter((item) => isPrimaryOutflow(item) || (isRefund(item) && !isNonRegularEconomicInflow(item)));
     const refunds = sum(period.filter(isRefund));
     const fees = fromCents(period.filter(isFinancialFee).reduce((total, item) => total + signedOutflowCents(item), 0));
     const moneyIn = sum(period.filter((item) => economicMeaningFor(item) === "income" || economicMeaningFor(item) === "gift-received"));
@@ -195,10 +200,10 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
     const unmodeledRequired = required.filter((item) => !componentKeys.has(identity(item)));
     const normalizationSufficient = complete && unmodeledRequired.length === 0 && components.length > 0;
     const normalizedMonthlyRequiredCost = fromCents(components.reduce((total, item) => total + toCents(item.normalizedMonthlyAmount), 0));
-    const netEconomicOutflow = fromCents(toCents(cash.moneyOut) - toCents(refunds));
+    const netEconomicOutflow = fromCents(toCents(cash.moneyOut) - toCents(refunds) + toCents(nonRegularEconomicInflows));
     const discretionaryConsumption = fromCents(toCents(netEconomicOutflow) - toCents(observedRequiredCosts));
     const availableToAllocate = fromCents(toCents(moneyIn) - toCents(observedRequiredCosts));
-    const residual = fromCents(toCents(availableToAllocate) - toCents(discretionaryConsumption) - toCents(verifiedWealth.amount ?? 0));
+    const residual = fromCents(toCents(availableToAllocate) + toCents(nonRegularEconomicInflows) - toCents(discretionaryConsumption) - toCents(verifiedWealth.amount ?? 0));
     const residualPercentage = availableToAllocate === 0 ? null : Math.round(toCents(residual) / toCents(availableToAllocate) * 10_000) / 100;
     const remainingKnown = complete && unknownItems.length === 0 && verifiedWealth.amount !== null;
     const unknownAllocationResidual: EvidenceLimitedAmount = remainingKnown
@@ -216,7 +221,7 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
       month, startDate, endDate: periodEnd, status: complete ? "complete" : "partial",
       coverage: { complete, confidence: complete ? "high" : "partial", message: complete ? "All imported transaction accounts cover this period." : "At least one imported transaction account does not cover this full period." },
       openingPosition: { status: "unknown", reason: "A synchronized whole-person opening balance snapshot is unavailable for this month." },
-      transactionCount: period.length, moneyIn, moneyOut: cash.moneyOut, rawCirculationIn: cash.circulationIn, rawCirculationOut: cash.circulationOut, netEconomicCashFlow: fromCents(toCents(moneyIn) - toCents(netEconomicOutflow)),
+      transactionCount: period.length, moneyIn, regularIncome: moneyIn, nonRegularEconomicInflows, moneyOut: cash.moneyOut, rawCirculationIn: cash.circulationIn, rawCirculationOut: cash.circulationOut, netEconomicCashFlow: fromCents(toCents(moneyIn) + toCents(nonRegularEconomicInflows) - toCents(netEconomicOutflow)),
       observedRequiredCosts,
       requiredCostCoverage: { status: complete ? "sufficient" : "partial", normalizationSufficient, normalizedMonthlyAmount: normalizationSufficient ? normalizedMonthlyRequiredCost : null,
         reason: !complete ? "Observed Required Costs reflect only available source coverage and must not be read as the Person's actual monthly requirement."
@@ -226,16 +231,17 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
       availableToAllocate, availableToAllocatePercentage,
       availableToAllocateChange: null, availableToAllocatePercentageChange: null, rollingThreeMonthAverage: null,
       verifiedWealthAllocation: { ...verifiedWealth, percentageOfAvailableToAllocate: verifiedWealth.amount !== null && availableToAllocate !== 0 ? Math.round(toCents(verifiedWealth.amount) / toCents(availableToAllocate) * 10_000) / 100 : null },
-      unknownAllocationResidual, remainingAvailable,
+      unknownAllocationResidual, remainingAvailable, unallocatedMoney: remainingAvailable,
       discretionaryConsumptionRate,
       allocationBridge: {
         moneyIn: { amount: moneyIn, percentageOfMoneyIn: moneyIn === 0 ? null : 100 },
+        nonRegularEconomicInflows: { amount: nonRegularEconomicInflows, percentageOfMoneyIn: moneyIn === 0 ? null : Math.round(toCents(nonRegularEconomicInflows) / toCents(moneyIn) * 10_000) / 100 },
         observedRequired: { amount: observedRequiredCosts, percentageOfMoneyIn: moneyIn === 0 ? null : Math.round(toCents(observedRequiredCosts) / toCents(moneyIn) * 10_000) / 100 },
         availableToAllocate: { amount: availableToAllocate, percentageOfMoneyIn: availableToAllocatePercentage },
         discretionaryConsumption: { amount: discretionaryConsumption, percentageOfAvailableToAllocate: discretionaryConsumptionRate },
         verifiedWealthAllocation: { ...verifiedWealth, percentageOfAvailableToAllocate: verifiedWealth.amount !== null && availableToAllocate !== 0 ? Math.round(toCents(verifiedWealth.amount) / toCents(availableToAllocate) * 10_000) / 100 : null },
-        unknownAllocationResidual, remainingAvailable,
-        equation: `${moneyIn.toFixed(2)} - ${observedRequiredCosts.toFixed(2)} - ${discretionaryConsumption.toFixed(2)} - ${verifiedWealth.amount === null ? "Unknown" : verifiedWealth.amount.toFixed(2)} wealth allocation = Partial remaining; residual ${residual.toFixed(2)}`,
+        unknownAllocationResidual, remainingAvailable, unallocatedMoney: remainingAvailable,
+        equation: `${moneyIn.toFixed(2)} - ${observedRequiredCosts.toFixed(2)} + ${nonRegularEconomicInflows.toFixed(2)} non-regular inflows - ${discretionaryConsumption.toFixed(2)} - ${verifiedWealth.amount === null ? "Unknown" : verifiedWealth.amount.toFixed(2)} wealth allocation = ${remainingKnown ? residual.toFixed(2) : `Partial; residual ${residual.toFixed(2)}`}`,
         reconciles: true,
       },
       transfers: cash.transfers, creditCardSettlements: cash.creditCardPayments, refunds, fees,
@@ -272,8 +278,8 @@ export const buildHistoricalFinancialFlow = ({ transactions, imports, investment
   return { generatedThrough: endDate, startMonth, endMonth, months,
     definitions: {
       availableToAllocate: "Money In excluding refunds, minus observed Required Costs. This is financial capacity before discretionary consumption, not money still available to spend.",
-      remainingAvailable: "Available to Allocate minus net discretionary consumption and verified wealth-building allocations; Partial/Unknown when wealth destinations are not factually linked.",
-      refunds: "Refunds reduce consumption in their canonical World/category and are excluded from Money In.",
+      remainingAvailable: "Available to Allocate plus factual non-regular economic inflows, minus discretionary consumption and verified wealth-building allocations; also exposed as Unallocated Money. Partial/Unknown when wealth destinations are not factually linked.",
+      refunds: "Purchase refunds reduce consumption in their canonical World/category. Factual rebates and banking rebates are shown as non-regular economic inflows. Neither is regular income.",
       exclusions: "Transfers and credit-card settlements are circulation and never consumption or wealth allocation.",
       partialCoverage: "Observed Required Costs are source-period facts; normalization and personal trend claims are suppressed when statement coverage is incomplete.",
     }, all: {

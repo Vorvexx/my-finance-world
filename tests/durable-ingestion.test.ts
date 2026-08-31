@@ -155,6 +155,12 @@ test("atomically commits normalized canonical transactions and exposes safe quer
     assert.equal(store.getTransactionsByAccount(ACCOUNT.id).length, 5);
     assert.equal(store.getTransactionsByImport("commit-import").length, 5);
     assert.equal(store.getImportHistory().length, 1);
+    const statement = store.getChequingStatementFactsByAccount(ACCOUNT.id)[0];
+    assert.equal(statement.openingBalanceCents, 100000);
+    assert.equal(statement.totalDepositsCents, 105000);
+    assert.equal(statement.totalWithdrawalsCents, 60000);
+    assert.equal(statement.closingBalanceCents, 145000);
+    assert.equal(statement.closingBalanceEvidence, "statement-label");
     const transaction = store.getTransactionsByImport("commit-import")[0];
     assert.equal(transaction.accountId, ACCOUNT.id);
     assert.equal(transaction.postedDate, null);
@@ -272,6 +278,7 @@ test("rolls back every transaction and leaves a recoverable proposed import on f
     });
     const duplicated: PreparedTdChequingImport = {
       journal: prepared.journal,
+      chequingStatementFacts: prepared.chequingStatementFacts,
       transactions: [
         prepared.transactions[0],
         { ...prepared.transactions[0], sourceRowNumber: 2 },
