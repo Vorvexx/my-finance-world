@@ -92,12 +92,12 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
     <div className="balance-history__table-wrap"><table><thead><tr><th>Month-end</th>
       {activeView === "cash" && <><th>Opening chequing</th><th>End chequing</th><th>Physical cash</th><th>Total cash</th></>}
       {activeView === "investments" && <>{view.investments.accounts.map((account) => <th key={account.viewKey}>{account.displayName}</th>)}<th>Total investments</th></>}
-      {activeView === "all" && <><th>Chequing</th><th>Physical cash</th><th>Total cash</th><th>Investments</th><th>Known total</th></>}
+      {activeView === "all" && <><th>{chequing?.displayName ?? "Chequing"}</th>{physicalCash && <th>{physicalCash.displayName}</th>}{view.investments.accounts.map((account) => <th key={account.viewKey}>{account.displayName}</th>)}<th>Known total</th></>}
       {activeView === "accounts" && <><th>{chequing?.displayName ?? "Chequing"}</th>{physicalCash && <th>{physicalCash.displayName}</th>}{view.investments.accounts.map((account) => <th key={account.viewKey}>{account.displayName}</th>)}</>}
       <th>Evidence</th></tr></thead><tbody>{rows.map((row) => <tr key={row.month}><th>{row.month}</th>
         {activeView === "cash" && <><td>{amount(row.chequingMonth?.openingCash ?? null)}</td><td>{amount(row.chequingEnd)}</td><td>{amount(row.physical)}</td><td>{amount(row.cashTotal)}</td></>}
         {activeView === "investments" && <>{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}<td>{amount(row.investmentTotal)}</td></>}
-        {activeView === "all" && <><td>{amount(row.chequingEnd)}</td><td>{amount(row.physical)}</td><td>{amount(row.cashTotal)}</td><td>{amount(row.investmentTotal)}</td><td>{amount(row.knownTotal)}</td></>}
+        {activeView === "all" && <><td>{amount(row.chequingEnd)}</td>{physicalCash && <td>{amount(row.physical)}</td>}{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}<td>{amount(row.knownTotal)}</td></>}
         {activeView === "accounts" && <><td>{amount(row.chequingEnd)}</td>{physicalCash && <td>{amount(row.physical)}</td>}{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}</>}
         <td><span className={row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "balance-evidence balance-evidence--known" : "balance-evidence"}>{row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "Recorded" : row.chequingMonth || row.investments.some((item) => item.value !== null) ? "Partial" : "Unknown"}</span></td>
       </tr>)}</tbody></table></div>
