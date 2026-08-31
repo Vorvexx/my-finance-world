@@ -77,9 +77,10 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
       ? investmentValues.reduce<number>((total, value) => total + (value ?? 0), 0) : null;
     const chequingEnd = chequingMonth?.closingCash ?? null;
     const cashTotal = chequingEnd !== null && (!physicalCash || physical !== null) ? chequingEnd + (physical ?? 0) : null;
+    const knownValues = [chequingEnd, physical, ...investmentValues].filter((value): value is number => value !== null);
     return {
       month, chequingMonth, physical, investments, investmentTotal, chequingEnd, cashTotal,
-      knownTotal: cashTotal !== null && investmentTotal !== null ? cashTotal + investmentTotal : null,
+      knownTotal: knownValues.length ? knownValues.reduce((total, value) => total + value, 0) : null,
     };
   });
   const amount = (value: number | null) => value === null ? <span className="balance-unknown">Unknown</span> : formatMoney(value, view.currency);
