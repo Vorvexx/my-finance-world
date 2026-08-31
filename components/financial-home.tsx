@@ -70,7 +70,7 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
     const physical = physicalCash?.freshness.status === "known" && physicalCash.freshness.asOf.slice(0, 7) === month && physicalCash.balance.status === "known" ? physicalCash.balance.amount : null;
     const investments = view.investments.accounts.map((account) => ({
       account,
-      value: account.investmentHistory?.snapshots.findLast((snapshot) => snapshot.date.slice(0, 7) === month)?.value ?? null,
+      value: account.investmentHistory?.snapshots.findLast((snapshot) => snapshot.startDate.slice(0, 7) <= month && snapshot.date.slice(0, 7) >= month)?.value ?? null,
     }));
     const investmentValues = investments.map((item) => item.value);
     const investmentTotal = investmentValues.length > 0 && investmentValues.every((value) => value !== null)
@@ -101,7 +101,7 @@ function BalanceHistory({ view }: { view: HomepageViewModel }) {
         {activeView === "accounts" && <><td>{amount(row.chequingEnd)}</td>{physicalCash && <td>{amount(row.physical)}</td>}{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}</>}
         <td><span className={row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "balance-evidence balance-evidence--known" : "balance-evidence"}>{row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "Recorded" : row.chequingMonth || row.investments.some((item) => item.value !== null) ? "Partial" : "Unknown"}</span></td>
       </tr>)}</tbody></table></div>
-    <small className="balance-history__note">Chequing is reconstructed to the exact calendar-month opening and close from reconciled statements and canonical transactions. Investment values appear only in months with recorded statements. Physical cash appears only on its dated Founder fact. Unknown is never treated as zero, and investment movement is not labelled as return.</small>
+    <small className="balance-history__note">Chequing is reconstructed to the exact calendar-month opening and close from reconciled statements and canonical transactions. Each investment statement ending value is shown throughout every month covered by that statement period; it is not a separately observed monthly valuation. Physical cash appears only on its dated Founder fact. Unknown is never treated as zero, and investment movement is not labelled as return.</small>
   </section>;
 }
 

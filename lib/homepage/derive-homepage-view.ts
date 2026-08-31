@@ -93,7 +93,7 @@ const accountView = (
     const ordered = [...investmentSnapshots].sort((left, right) => left.statementPeriodEnd.localeCompare(right.statementPeriodEnd));
     const latest = ordered.at(-1); const previous = ordered.at(-2);
     return { investmentHistory: {
-      snapshots: ordered.map((snapshot) => ({ date: snapshot.statementPeriodEnd, value: fromCents(snapshot.endingValueCents) })),
+      snapshots: ordered.map((snapshot) => ({ startDate: snapshot.statementPeriodStart, date: snapshot.statementPeriodEnd, value: fromCents(snapshot.endingValueCents) })),
       previousDate: previous?.statementPeriodEnd ?? null,
       valueChange: latest && previous ? money(fromCents(latest.endingValueCents - previous.endingValueCents)) : unknown("A previous recorded statement is needed."),
       message: latest && previous

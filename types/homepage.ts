@@ -63,7 +63,7 @@ export type HomepageAccount = {
     | { status: "known"; employee: number; employer: number }
     | { status: "unknown"; message: string };
   investmentHistory?: {
-    snapshots: readonly { date: string; value: number }[];
+    snapshots: readonly { startDate: string; date: string; value: number }[];
     previousDate: string | null;
     valueChange: HomepageMoney;
     message: string;
