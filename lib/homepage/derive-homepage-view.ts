@@ -16,7 +16,7 @@ import {
 } from "../analytics/financial-analytics.ts";
 import { economicMeaningFor } from "../financial-model/economic-semantics.ts";
 import { buildHistoricalFinancialFlow } from "../analytics/monthly-financial-flow.ts";
-import { buildChequingStatementHistory } from "../analytics/chequing-statement-history.ts";
+import { buildChequingStatementHistory, buildMonthlyChequingBalances } from "../analytics/chequing-statement-history.ts";
 import { resolveFinancialPeriod, type FinancialPeriodKey } from "./financial-period.ts";
 import { detectMissingExpectedEvents, detectRecurringPatterns } from "./recurring-patterns.ts";
 
@@ -478,6 +478,7 @@ export const deriveHomepageView = ({
         .sort((left, right) => right.transactionDate.localeCompare(left.transactionDate)).slice(0, 12)
         .map((transaction, index) => activityView(transaction, `cash-uncertain-history-${index + 1}`)),
       statementHistory: chequingStatementHistory,
+      monthlyBalanceHistory: buildMonthlyChequingBalances(chequingStatementFacts ?? [], transactions ?? []),
     },
     investments: {
       total: positionAvailable && model.totalsByWorld.investments !== null ? money(model.totalsByWorld.investments) : unknown("Investment balance is unavailable."),

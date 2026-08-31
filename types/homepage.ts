@@ -2,7 +2,7 @@ export type HomepageMoney = { status: "known"; amount: number } | { status: "unk
 import type { FinancialPeriodKey } from "../lib/homepage/financial-period.ts";
 import type { BrowserReviewSuggestion } from "./review-interface.ts";
 import type { HistoricalFinancialFlow } from "../lib/analytics/monthly-financial-flow.ts";
-import type { ChequingStatementHistoryItem } from "../lib/analytics/chequing-statement-history.ts";
+import type { ChequingStatementHistoryItem, MonthlyChequingBalance } from "../lib/analytics/chequing-statement-history.ts";
 
 export type HomepageActivity = {
   viewKey: string;
@@ -133,6 +133,7 @@ export type HomepageViewModel = {
     incomeHistory: readonly HomepageActivity[];
     uncertainHistory: readonly HomepageActivity[];
     statementHistory: readonly ChequingStatementHistoryItem[];
+    monthlyBalanceHistory: readonly MonthlyChequingBalance[];
   };
   investments: { total: HomepageMoney; accountCount: number; accounts: readonly HomepageAccount[]; change: HomepageMoney; changeMessage: string };
   liabilities: { total: HomepageMoney; accountCount: number; accounts: readonly HomepageAccount[] };

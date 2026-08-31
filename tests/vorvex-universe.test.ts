@@ -84,7 +84,8 @@ test("Universe remains keyboard-operable, responsive, and motion-safe", async ()
 test("information surfaces close independently from spatial navigation", async () => {
   const [component, hud] = await Promise.all([readFile(componentPath, "utf8"), readFile(hudPath, "utf8")]);
   assert.match(component, /const closeSurface = \(\) => \{ setSurfaceAfterTravel\(false\); setSurfaceOpen\(false\); \}/);
-  assert.match(component, /<FinancialHud key=\{hudContextKey\} open=\{surfaceOpen\} onOpen=\{\(\) => setSurfaceOpen\(true\)\} onClose=\{closeSurface\}>/);
+  assert.match(component, /<FinancialHud key=\{hudContextKey\} open=\{surfaceOpen\} onOpen=\{\(\) => setSurfaceOpen\(true\)\} onClose=\{closeSurface\} defaultExpanded=/);
+  assert.match(component, /<BalanceHistory view=\{view\} \/>/);
   assert.match(hud, /aria-label="Close information surface"/);
   assert.match(component, /<IntelligenceRail view=\{view\}/);
   assert.match(component, /onClick=\{leaveWorld\} aria-label="Return to Universe"/);

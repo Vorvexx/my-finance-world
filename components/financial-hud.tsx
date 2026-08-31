@@ -2,8 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 
-export function FinancialHud({ children, onClose, open = true, onOpen }: { children: ReactNode; onClose: () => void; open?: boolean; onOpen?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+export function FinancialHud({ children, onClose, open = true, onOpen, defaultExpanded = false }: { children: ReactNode; onClose: () => void; open?: boolean; onOpen?: () => void; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   return <aside className="world-dock financial-hud" data-open={open || undefined} data-expanded={open && expanded || undefined} aria-live="polite">
     {!open && <button type="button" className="financial-hud__open" onClick={onOpen}>Open details</button>}
     {open && <>

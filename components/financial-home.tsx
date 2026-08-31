@@ -14,6 +14,7 @@ import { categoryIcon, VorvexIcon, type VorvexIconKey } from "@/components/vorve
 export type WorldKey = "cash" | "investments" | "liabilities" | "home" | "vehicle" | "lifestyle" | "cashflow";
 type NavigationWorldKey = Exclude<WorldKey, "liabilities" | "cashflow">;
 type CashflowChildKey = "money-in" | "money-out" | "recent" | "upcoming";
+type BalanceHistoryView = "all" | "cash" | "investments" | "accounts";
 type FlowGroup = HomepageViewModel["cashflow"]["outflowGroups"][number];
 type SpatialChild = { key: string; label: string; value: string; tone: FinancialOrbAccent; icon: ReactNode; reviewState?: boolean; positionState?: boolean; semanticType?: "period-flow" | "snapshot" | "statement-fact" | "expectation"; selected: boolean; select: () => void };
 
@@ -41,6 +42,66 @@ function CashStatementHistory({ view }: { view: HomepageViewModel }) {
       <div>{history.map((period) => <details key={period.statementId}><summary>{period.startDate} → {period.endDate} · Closing {formatMoney(period.closingCash, view.currency)} · Cash Change {period.cashChange >= 0 ? "+" : ""}{formatMoney(period.cashChange, view.currency)}</summary><dl className="flow-now"><div><dt>Opening Cash</dt><dd>{formatMoney(period.openingCash, view.currency)}</dd></div><div><dt>Deposits</dt><dd>{formatMoney(period.deposits, view.currency)}</dd></div><div><dt>Withdrawals</dt><dd>{formatMoney(period.withdrawals, view.currency)}</dd></div><div><dt>Closing Cash</dt><dd>{formatMoney(period.closingCash, view.currency)}</dd></div><div><dt>Cash Change</dt><dd>{period.cashChange >= 0 ? "+" : ""}{formatMoney(period.cashChange, view.currency)}</dd></div><div><dt>Change</dt><dd>{period.percentageChange === null ? "Unavailable" : `${period.percentageChange >= 0 ? "+" : ""}${period.percentageChange.toFixed(2)}%`}</dd></div></dl><small>Verified TD Chequing statement · statement arithmetic reconciled{period.adjacentBalanceReconciles === true ? " · adjacent balance reconciled" : ""}. Cash Change is not Savings.</small></details>)}</div>
     </details>
   </>;
+}
+
+const monthSequence = (start: string, end: string) => {
+  const months: string[] = [];
+  let cursor = `${start}-01`;
+  while (cursor.slice(0, 7) <= end) {
+    months.push(cursor.slice(0, 7));
+    const date = new Date(`${cursor}T00:00:00Z`);
+    cursor = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+  }
+  return months;
+};
+
+function BalanceHistory({ view }: { view: HomepageViewModel }) {
+  const [activeView, setActiveView] = useState<BalanceHistoryView>("all");
+  const chequing = view.cash.accounts.find((account) => account.accountType === "Chequing");
+  const physicalCash = view.cash.accounts.find((account) => /physical cash/i.test(account.displayName));
+  const chequingByMonth = new Map(view.cash.monthlyBalanceHistory.map((period) => [period.month, period]));
+  const investmentMonths = view.investments.accounts.flatMap((account) => account.investmentHistory?.snapshots.map((snapshot) => snapshot.date.slice(0, 7)) ?? []);
+  const knownMonths = [...view.cash.monthlyBalanceHistory.map((period) => period.month), ...investmentMonths];
+  const firstMonth = [...knownMonths].sort()[0];
+  const lastMonth = [...knownMonths].sort().at(-1);
+  if (!firstMonth || !lastMonth) return <section className="balance-history"><p>Balance history is unavailable.</p></section>;
+  const rows = monthSequence(firstMonth, lastMonth).reverse().map((month) => {
+    const chequingMonth = chequingByMonth.get(month);
+    const physical = physicalCash?.freshness.status === "known" && physicalCash.freshness.asOf.slice(0, 7) === month && physicalCash.balance.status === "known" ? physicalCash.balance.amount : null;
+    const investments = view.investments.accounts.map((account) => ({
+      account,
+      value: account.investmentHistory?.snapshots.findLast((snapshot) => snapshot.date.slice(0, 7) === month)?.value ?? null,
+    }));
+    const investmentValues = investments.map((item) => item.value);
+    const investmentTotal = investmentValues.length > 0 && investmentValues.every((value) => value !== null)
+      ? investmentValues.reduce<number>((total, value) => total + (value ?? 0), 0) : null;
+    const chequingEnd = chequingMonth?.closingCash ?? null;
+    const cashTotal = chequingEnd !== null && (!physicalCash || physical !== null) ? chequingEnd + (physical ?? 0) : null;
+    return {
+      month, chequingMonth, physical, investments, investmentTotal, chequingEnd, cashTotal,
+      knownTotal: cashTotal !== null && investmentTotal !== null ? cashTotal + investmentTotal : null,
+    };
+  });
+  const amount = (value: number | null) => value === null ? <span className="balance-unknown">Unknown</span> : formatMoney(value, view.currency);
+  const tabs: ReadonlyArray<{ key: BalanceHistoryView; label: string }> = [
+    { key: "all", label: "All" }, { key: "cash", label: "Cash" }, { key: "investments", label: "Investments" }, { key: "accounts", label: "Accounts" },
+  ];
+  return <section className="balance-history financial-hud__expanded-evidence">
+    <div className="balance-history__heading"><div><p className="world-kicker">Past to now</p><h3>Balance History</h3><small>Your financial position over time · month-end evidence only</small></div><div className="balance-history__tabs" role="tablist" aria-label="Balance history views">{tabs.map((tab) => <button key={tab.key} type="button" role="tab" aria-selected={activeView === tab.key} onClick={() => setActiveView(tab.key)}>{tab.label}</button>)}</div></div>
+    <div className="balance-history__table-wrap"><table><thead><tr><th>Month-end</th>
+      {activeView === "cash" && <><th>Opening chequing</th><th>End chequing</th><th>Physical cash</th><th>Total cash</th></>}
+      {activeView === "investments" && <>{view.investments.accounts.map((account) => <th key={account.viewKey}>{account.displayName}</th>)}<th>Total investments</th></>}
+      {activeView === "all" && <><th>Chequing</th><th>Physical cash</th><th>Total cash</th><th>Investments</th><th>Known total</th></>}
+      {activeView === "accounts" && <><th>{chequing?.displayName ?? "Chequing"}</th>{physicalCash && <th>{physicalCash.displayName}</th>}{view.investments.accounts.map((account) => <th key={account.viewKey}>{account.displayName}</th>)}</>}
+      <th>Evidence</th></tr></thead><tbody>{rows.map((row) => <tr key={row.month}><th>{row.month}</th>
+        {activeView === "cash" && <><td>{amount(row.chequingMonth?.openingCash ?? null)}</td><td>{amount(row.chequingEnd)}</td><td>{amount(row.physical)}</td><td>{amount(row.cashTotal)}</td></>}
+        {activeView === "investments" && <>{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}<td>{amount(row.investmentTotal)}</td></>}
+        {activeView === "all" && <><td>{amount(row.chequingEnd)}</td><td>{amount(row.physical)}</td><td>{amount(row.cashTotal)}</td><td>{amount(row.investmentTotal)}</td><td>{amount(row.knownTotal)}</td></>}
+        {activeView === "accounts" && <><td>{amount(row.chequingEnd)}</td>{physicalCash && <td>{amount(row.physical)}</td>}{row.investments.map((item) => <td key={item.account.viewKey}>{amount(item.value)}</td>)}</>}
+        <td><span className={row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "balance-evidence balance-evidence--known" : "balance-evidence"}>{row.chequingMonth?.coverage === "verified" && (row.investments.length === 0 || row.investmentTotal !== null) ? "Recorded" : row.chequingMonth || row.investments.some((item) => item.value !== null) ? "Partial" : "Unknown"}</span></td>
+      </tr>)}</tbody></table></div>
+    <small className="balance-history__note">Chequing is reconstructed to the exact calendar-month opening and close from reconciled statements and canonical transactions. Investment values appear only in months with recorded statements. Physical cash appears only on its dated Founder fact. Unknown is never treated as zero, and investment movement is not labelled as return.</small>
+  </section>;
 }
 
 function FinancialFlowAnalytics({ view }: { view: HomepageViewModel }) {
@@ -71,6 +132,7 @@ function WorldDetail({ world, view }: { world: NavigationWorldKey; view: Homepag
       <p className="world-kicker">Everyday money</p>
       <h2>Position and movement</h2>
       <div className="pnn-grid"><section className="ranked-past"><p>Past · Chequing history</p><CashStatementHistory view={view} /></section><section><p>Now · {view.period.displayLabel}</p><dl className="flow-now"><div><dt>Money In</dt><dd>{moneyLabel(view.cashflow.moneyIn, currency)}</dd></div><div><dt>Money Out</dt><dd>{moneyLabel(view.cashflow.moneyOut, currency)}</dd></div><div><dt>Net movement</dt><dd>{moneyLabel(view.cashflow.net, currency)}</dd></div></dl><small>Cash position {moneyLabel(view.cash.total, currency)} · recorded {view.snapshotDate ?? "date Unknown"}</small></section><section><p>Next · ranked impact</p>{upcoming.slice(0, 3).map((item) => <span key={item.viewKey}><strong>{item.certainty === "known" ? "Known" : "Expected"} · {item.label}</strong><small>{item.certainty === "known" ? formatMoney(item.amount, currency) : `~${formatMoney(item.amount, currency)}`} · {item.date}</small></span>)}{upcoming.length === 0 && <small>Nothing known or strongly expected yet.</small>}</section></div>
+      <BalanceHistory view={view} />
       <section className="account-transaction-groups financial-hud__expanded-evidence"><ActivityList title="Recorded income · all imported coverage" items={view.cash.incomeHistory} currency={currency} empty="No supported income is recorded." /><ActivityList title="Still uncertain · all imported coverage" items={view.cash.uncertainHistory} currency={currency} empty="No genuinely uncertain Cash activity remains." /></section>
       <FinancialFlowAnalytics view={view} />
     </>;
@@ -292,7 +354,7 @@ export default function FinancialHome({ view }: { view: HomepageViewModel }) {
       <FinancialConstellation label={selected ? `${selected} objects` : "Financial objects"} role="children">{spatialChildren.map((child) => <FinancialOrb key={child.key} name={child.label} value={child.value} icon={child.icon} accent={child.tone} semanticType={child.semanticType} size={child.selected ? "primary" : "secondary"} state={child.selected ? "selected" : depth === "object" && circulationGroups.length === 0 && cardGroups.length === 0 ? "receded" : "idle"} className={[child.reviewState ? "financial-orb--review-state" : "", child.positionState ? "financial-orb--position" : ""].filter(Boolean).join(" ")} onClick={child.select} />)}</FinancialConstellation>
     </FinancialScene>
     {selected && (selectedAccount || selectedLifestyleCategory || selectedWorldCategory || selectedFinancing) && <IntelligenceRail view={view} world={selected} account={selectedAccount} category={selectedLifestyleCategory ?? selectedWorldCategory} />}
-    {selected && !travelling && <FinancialHud key={hudContextKey} open={surfaceOpen} onOpen={() => setSurfaceOpen(true)} onClose={closeSurface}>{selectedLifestyleCategory && selected === "lifestyle"
+    {selected && !travelling && <FinancialHud key={hudContextKey} open={surfaceOpen} onOpen={() => setSurfaceOpen(true)} onClose={closeSurface} defaultExpanded={selected === "cash" && !selectedAccount && !selectedCashflow && !selectedFlowGroup}>{selectedLifestyleCategory && selected === "lifestyle"
       ? <CategoryDetail category={selectedLifestyleCategory} currency={view.currency} period={view.period} world="Lifestyle" />
       : selectedWorldCategory && (selected === "home" || selected === "vehicle")
       ? <CategoryDetail category={selectedWorldCategory} currency={view.currency} period={view.period} world={selected === "home" ? "Home" : "Vehicle"} />

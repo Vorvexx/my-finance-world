@@ -1,4 +1,5 @@
 import type { CanonicalChequingStatementFacts } from "../../types/imports.ts";
+import type { CanonicalTransaction } from "../../types/transactions.ts";
 
 const fromCents = (value: number) => value / 100;
 
@@ -15,6 +16,46 @@ export type ChequingStatementHistoryItem = {
   adjacentBalanceReconciles: boolean | null;
   coverage: "verified";
   source: "TD Chequing statement";
+};
+
+export type MonthlyChequingBalance = {
+  month: string;
+  openingCash: number | null;
+  closingCash: number | null;
+  coverage: "verified" | "partial";
+};
+
+const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
+const previousDay = (date: string) => new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+const monthsBetween = (start: string, end: string) => {
+  const months: string[] = []; let cursor = `${start}-01`;
+  while (cursor.slice(0, 7) <= end) {
+    months.push(cursor.slice(0, 7));
+    const date = new Date(`${cursor}T00:00:00Z`);
+    cursor = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+  }
+  return months;
+};
+
+export const buildMonthlyChequingBalances = (
+  facts: readonly CanonicalChequingStatementFacts[],
+  transactions: readonly CanonicalTransaction[],
+): readonly MonthlyChequingBalance[] => {
+  if (!facts.length) return [];
+  const ordered = [...facts].sort((left, right) => left.statementPeriodStart.localeCompare(right.statementPeriodStart));
+  const balanceAt = (date: string): number | null => {
+    const fact = ordered.find((item) => item.statementPeriodStart <= date && item.statementPeriodEnd >= date);
+    if (!fact) return null;
+    if (date === fact.statementPeriodEnd) return fromCents(fact.closingBalanceCents);
+    const movement = transactions.filter((item) => item.accountId === fact.accountId && item.transactionDate > fact.statementPeriodStart && item.transactionDate <= date)
+      .reduce((total, item) => total + (item.direction === "inflow" ? Math.round(item.amount * 100) : -Math.round(item.amount * 100)), 0);
+    return fromCents(fact.openingBalanceCents + movement);
+  };
+  return monthsBetween(ordered[0].statementPeriodStart.slice(0, 7), ordered.at(-1)!.statementPeriodEnd.slice(0, 7)).map((month) => {
+    const openingCash = balanceAt(previousDay(`${month}-01`));
+    const closingCash = balanceAt(monthEnd(month));
+    return { month, openingCash, closingCash, coverage: openingCash !== null && closingCash !== null ? "verified" as const : "partial" as const };
+  });
 };
 
 export const buildChequingStatementHistory = (
