@@ -18,6 +18,7 @@ export type BrowserReviewItem = {
   accountNames: readonly string[];
   direction: "inflow" | "outflow" | "unknown";
   recurring: boolean;
+  relatedUnderstandings: readonly { source: "Founder rule" | "Learned rule"; financialMeaning: FinancialMeaning | null; category: string | null; world: MoneyWorldKey | null }[];
   representativeTransactions: readonly { actionToken: string; date: string | null; amount: number; accountName: string; description: string; direction: "inflow" | "outflow" | "unknown" }[];
   suggestions: readonly BrowserReviewSuggestion[];
 };

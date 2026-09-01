@@ -25,6 +25,7 @@ export default function BulkReviewWorkspace({ items }: { items: readonly Browser
   const [search, setSearch] = useState(""); const [account, setAccount] = useState(""); const [direction, setDirection] = useState("");
   const [from, setFrom] = useState(""); const [to, setTo] = useState(""); const [understanding, setUnderstanding] = useState("");
   const [sort, setSort] = useState("date-desc"); const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
+  const [selectedBatchToken, setSelectedBatchToken] = useState<string | null>(null);
   const [world, setWorld] = useState<string | null>(null); const [choice, setChoice] = useState<BrowserReviewSuggestion | null>(null);
   const [creating, setCreating] = useState(false); const [phrase, setPhrase] = useState(""); const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ message: string; undoToken: string } | null>(null); const [error, setError] = useState("");
@@ -48,16 +49,24 @@ export default function BulkReviewWorkspace({ items }: { items: readonly Browser
   }, [selected, filtered]);
   const worlds = useMemo(() => [...new Set(suggestions.map((suggestion) => suggestion.world).filter(Boolean))] as string[], [suggestions]);
   const choices = useMemo(() => suggestions.filter((suggestion) => suggestion.world === world), [suggestions, world]);
+  const batches = useMemo(() => items.filter((item) => item.similarCount > 1).slice(0, 12), [items]);
 
-  const toggle = (token: string) => setSelectedTokens((current) => current.includes(token) ? current.filter((value) => value !== token) : [...current, token]);
-  const selectVisible = () => setSelectedTokens(filtered.map((row) => row.token));
+  const toggle = (token: string) => { setSelectedBatchToken(null); setSelectedTokens((current) => current.includes(token) ? current.filter((value) => value !== token) : [...current, token]); };
+  const selectVisible = () => { setSelectedBatchToken(null); setSelectedTokens(filtered.map((row) => row.token)); };
+  const selectBatch = (item: BrowserReviewItem) => {
+    setSelectedTokens(item.representativeTransactions.map((transaction) => transaction.actionToken));
+    setSelectedBatchToken(item.actionToken);
+    setWorld(null); setChoice(null); setCreating(false); setPhrase("");
+  };
   const submit = async () => {
     if (!choice || selected.length === 0) return; setPending(true); setError("");
     try {
-      const response = await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ actionTokens: selected.map((row) => row.token), choice: "classify", financialMeaning: choice.financialMeaning, category: choice.category, world: choice.world, userPhrase: phrase.trim() }) });
+      const response = await fetch("/api/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(selectedBatchToken
+        ? { actionToken: selectedBatchToken, scope: "group", choice: "classify", financialMeaning: choice.financialMeaning, category: choice.category, world: choice.world, userPhrase: phrase.trim() }
+        : { actionTokens: selected.map((row) => row.token), choice: "classify", financialMeaning: choice.financialMeaning, category: choice.category, world: choice.world, userPhrase: phrase.trim() }) });
       const body = await response.json() as { message?: string; undoToken?: string };
       if (!response.ok || !body.undoToken) throw new Error();
-      setResult({ message: body.message ?? `${selected.length} transactions categorized`, undoToken: body.undoToken }); setSelectedTokens([]); setChoice(null); setCreating(false); setPhrase(""); router.refresh();
+      setResult({ message: body.message ?? `${selected.length} transactions categorized`, undoToken: body.undoToken }); setSelectedTokens([]); setSelectedBatchToken(null); setChoice(null); setCreating(false); setPhrase(""); router.refresh();
     } catch { setError("The selected transactions could not be categorized. Nothing else was changed."); } finally { setPending(false); }
   };
   const undo = async () => {
@@ -69,6 +78,21 @@ export default function BulkReviewWorkspace({ items }: { items: readonly Browser
   };
 
   return <section className="bulk-review" aria-label="Bulk transaction review">
+    {batches.length > 0 && <section className="review-batch-priority" aria-label="High-impact review batches">
+      <header><div><p>Batch review</p><h3>Start with repeated patterns</h3></div><small>Exact account, normalized description, direction and current meaning must agree. Varied non-recurring amounts are kept separate.</small></header>
+      <div className="review-batch-grid">{batches.map((item) => {
+        const dates = item.representativeTransactions.map((transaction) => transaction.date).filter((date): date is string => Boolean(date)).sort();
+        const first = dates[0] ?? null; const last = dates.at(-1) ?? null;
+        const signedTotal = item.direction === "outflow" ? -item.totalAmount : item.totalAmount;
+        return <article key={item.actionToken} className="review-batch-card">
+          <div className="review-batch-heading"><div><p>{item.recurring ? "Recurring exact pattern" : "Exact repeated pattern"}</p><h4>{item.description}</h4></div><strong>{item.similarCount} transactions</strong></div>
+          <dl><div><dt>Direction</dt><dd>{item.direction}</dd></div><div><dt>Total</dt><dd>{new Intl.NumberFormat("en-CA", { style: "currency", currency: item.currency }).format(signedTotal)}</dd></div><div><dt>Date range</dt><dd>{first && last ? `${dateLabel(first)} → ${dateLabel(last)}` : "Date unavailable"}</dd></div><div><dt>Current understanding</dt><dd>{[item.currentWorld ? WORLD_LABELS[item.currentWorld] ?? item.currentWorld : null, item.currentCategory, item.currentFinancialMeaning !== "unknown" ? item.currentFinancialMeaning : null].filter(Boolean).join(" · ") || "Unknown"}</dd></div></dl>
+          <details><summary>Inspect representative evidence</summary><ul>{item.representativeTransactions.slice(0, 4).map((transaction) => <li key={transaction.actionToken}><span>{dateLabel(transaction.date)} · {transaction.description}</span><b>{moneyLabel(transaction.amount, transaction.direction, item.currency)}</b></li>)}</ul>{item.similarCount > 4 && <small>Plus {item.similarCount - 4} more; every transaction remains inspectable after selection.</small>}</details>
+          <div className="review-batch-related"><small>{item.relatedUnderstandings.length ? `Related: ${item.relatedUnderstandings.map((rule) => `${rule.source} · ${rule.category ?? rule.financialMeaning ?? "Unknown"}`).join("; ")}` : "No existing related Founder or learned rule."}</small><small>{item.explanation}</small></div>
+          <button type="button" onClick={() => selectBatch(item)}>Select this batch ({item.similarCount})</button>
+        </article>;
+      })}</div>
+    </section>}
     <div className="bulk-review-toolbar">
       <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search merchant or description" aria-label="Search merchant or description" />
       <select value={account} onChange={(event) => setAccount(event.target.value)} aria-label="Filter by account"><option value="">All accounts</option>{accounts.map((name) => <option key={name}>{name}</option>)}</select>
@@ -77,7 +101,7 @@ export default function BulkReviewWorkspace({ items }: { items: readonly Browser
       <input value={understanding} onChange={(event) => setUnderstanding(event.target.value)} placeholder="World, category or meaning" aria-label="Filter by World category or meaning" />
       <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort transactions"><option value="date-desc">Newest date</option><option value="date-asc">Oldest date</option><option value="description-asc">Merchant A–Z</option><option value="description-desc">Merchant Z–A</option><option value="amount-desc">Largest amount</option><option value="amount-asc">Smallest amount</option></select>
     </div>
-    <div className="bulk-selection-bar"><button type="button" onClick={selectVisible}>Select all visible ({filtered.length})</button><button type="button" onClick={() => setSelectedTokens([])}>Clear selection</button><strong>{selected.length} transaction{selected.length === 1 ? "" : "s"} selected</strong><span>{filtered.length} unresolved transaction{filtered.length === 1 ? "" : "s"} visible</span></div>
+    <div className="bulk-selection-bar"><button type="button" onClick={selectVisible}>Select all visible ({filtered.length})</button><button type="button" onClick={() => { setSelectedTokens([]); setSelectedBatchToken(null); }}>Clear selection</button><strong>{selected.length} transaction{selected.length === 1 ? "" : "s"} selected{selectedBatchToken ? " · safe batch rule" : ""}</strong><span>{filtered.length} unresolved transaction{filtered.length === 1 ? "" : "s"} visible</span></div>
     <div className="bulk-table-wrap"><table><thead><tr><th><span className="sr-only">Select</span></th><th>Date</th><th>Merchant / description</th><th>Account</th><th>Current understanding</th><th>Amount</th></tr></thead><tbody>{filtered.map((row) => <tr key={row.token} className={selectedTokens.includes(row.token) ? "is-selected" : ""}><td><input type="checkbox" checked={selectedTokens.includes(row.token)} onChange={() => toggle(row.token)} aria-label={`Select ${row.description} ${dateLabel(row.date)}`} /></td><td>{dateLabel(row.date)}</td><td><strong>{row.description}</strong><small>Unresolved</small></td><td>{row.account}</td><td>{[row.world ? WORLD_LABELS[row.world] ?? row.world : null, row.category ?? (row.meaning !== "unknown" ? row.meaning : null)].filter(Boolean).join(" · ") || "Unknown"}</td><td className={row.direction}>{moneyLabel(row.amount, row.direction, row.currency)}</td></tr>)}</tbody></table>{filtered.length === 0 && <p className="bulk-empty">No unresolved transactions match these filters.</p>}</div>
     {selected.length > 0 && <aside className="bulk-classifier" aria-label="Categorize selected transactions"><header><div><p>Categorize selected</p><h2>{selected.length} transaction{selected.length === 1 ? "" : "s"}</h2></div><details><summary>Inspect exactly what will change</summary><ul>{selected.map((row) => <li key={row.token}><span>{dateLabel(row.date)} · {row.description} · {row.account}</span><b>{moneyLabel(row.amount, row.direction, row.currency)}</b></li>)}</ul></details></header><h3>1. Choose a World</h3><div className="bulk-choice-row">{worlds.map((key) => <button type="button" key={key} aria-pressed={world === key} onClick={() => { setWorld(key); setChoice(null); setCreating(false); }}>{WORLD_LABELS[key] ?? key}</button>)}</div>{world && <><h3>2. Choose meaning or category</h3><div className="bulk-choice-row">{choices.map((suggestion) => <button type="button" key={suggestion.id} aria-pressed={choice?.id === suggestion.id} onClick={() => { setChoice(suggestion); setCreating(false); }}>{suggestion.label}</button>)}<button type="button" onClick={() => { setCreating(true); setChoice(null); }}>+ New</button></div></>}{creating && <div className="bulk-new"><label>New category<input autoFocus value={phrase} onChange={(event) => { setPhrase(event.target.value); setChoice(null); }} /></label>{phrase.trim() && world && <div className="bulk-choice-row">{(["expense", "income", "refund", "transfer", "fee"] as FinancialMeaning[]).map((meaning) => <button type="button" key={meaning} onClick={() => setChoice({ id: `new-${meaning}`, label: phrase.trim(), path: `${WORLD_LABELS[world]} → ${phrase.trim()}`, financialMeaning: meaning, category: phrase.trim(), world: world as BrowserReviewSuggestion["world"], reason: "Created by the Founder.", searchTerms: phrase.trim(), recommended: false })}>{meaning}</button>)}</div>}<button type="button" onClick={() => { setCreating(false); setPhrase(""); setChoice(null); }}>Cancel</button></div>}<footer><button type="button" className="review-primary" disabled={!choice || pending} onClick={submit}>Confirm {selected.length}</button></footer></aside>}
     {result && <div className="bulk-result" role="status"><strong>{result.message}</strong><button type="button" onClick={undo} disabled={pending}>Undo</button></div>}{error && <p className="review-error" role="alert">{error}</p>}

@@ -163,6 +163,7 @@ export class FounderReviewService {
     this.#store.restoreDeferredReviews(now.toISOString());
     const transactionById = new Map(transactions.map((transaction) => [transaction.id, transaction]));
     const ambiguous = ambiguousGroupKeys(transactions);
+    const activeRules = this.#store.listRules().filter((rule) => rule.status === "active");
     const grouped = new Map<string, ReviewItem[]>();
     for (const item of this.#store.listReviewItems("pending")) {
       const transaction = transactionById.get(item.transactionId);
@@ -191,6 +192,8 @@ export class FounderReviewService {
           representativeDescription: item.description,
           accountNames: [...new Set(matched.map((transaction) => accountNames.get(transaction.accountId) ?? "Account"))],
           direction: matched[0]?.direction ?? "unknown", recurring: isRecurring(matched),
+          relatedUnderstandings: activeRules.filter((rule) => rule.normalizedCounterparty === item.normalizedCounterparty)
+            .map((rule) => ({ source: rule.source === "user-created" ? "Founder rule" as const : "Learned rule" as const, ...rule.classification })),
           representativeTransactions: ordered.map((transaction) => ({
             actionToken: sealReviewReference([itemByTransactionId.get(transaction.id)!.id], this.#key, now),
             date: reviewDate(transaction), amount: transaction.amount,

@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     if (!saved) return NextResponse.json({ message: "Review could not be saved." }, { status: 503 });
     appendSafeAuditEvent({ at: new Date().toISOString(), event: "review-saved", authority: "founder", source: "local-ui", reason: choice === "classify" ? "Founder confirmed a transaction classification." : `Founder selected ${choice}.` });
     revalidatePath("/");
-    return NextResponse.json({ message: choice === "review-later" ? "Set aside for later. Nothing was classified." : `Done — ${text(body.world) || "financial meaning"} → ${text(body.category) || text(body.financialMeaning)}` });
+    return NextResponse.json({ message: choice === "review-later" ? "Set aside for later. Nothing was classified." : `Done — ${text(body.world) || "financial meaning"} → ${text(body.category) || text(body.financialMeaning)}`, undoToken: choice === "classify" ? actionToken : undefined });
   } catch {
     return NextResponse.json({ message: "Review could not be saved. Refresh and try again." }, { status: 400 });
   }
