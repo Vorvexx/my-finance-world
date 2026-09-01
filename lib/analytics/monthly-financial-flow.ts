@@ -72,7 +72,8 @@ const isFinancialFee = (transaction: CanonicalTransaction) => /^(?:bank|banking)
     && transaction.attribution.world !== "home" && transaction.attribution.world !== "vehicle" && transaction.attribution.world !== "investments");
 const isNonRegularEconomicInflow = (transaction: CanonicalTransaction) => isRefund(transaction)
   && (/rebate|cashback/i.test(transaction.attribution.category?.trim() ?? "")
-    || /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? ""));
+    || /^(?:bank|banking) fees$/i.test(transaction.attribution.category?.trim() ?? "")
+    || (economicMeaningFor(transaction) === "reimbursement" && /workplace wellness benefit/i.test(transaction.attribution.category?.trim() ?? "")));
 const identity = (transaction: CanonicalTransaction) => [transaction.accountId, transaction.normalizedCounterparty.trim().toLocaleUpperCase("en-CA"), transaction.attribution.category ?? "", transaction.attribution.world ?? ""].join("|");
 const evidence = (transaction: CanonicalTransaction, accountNames: ReadonlyMap<string, string>): AnalyticsEvidence => ({
   date: transaction.transactionDate, description: transaction.rawDescription, amount: transaction.amount,

@@ -147,7 +147,7 @@ test("review UI presents one filterable bulk workspace with explicit selection a
   ]);
   for (const phrase of ["Review unresolved transactions", "Only checked transactions will change", "BulkReviewWorkspace"])
     assert.equal(page.includes(phrase), true, phrase);
-  for (const phrase of ["Batch review", "Start with repeated patterns", "Exact account, normalized description, direction and current meaning must agree", "Inspect representative evidence", "Select this batch", "Search merchant or description", "All accounts", "Inflow and outflow", "World, category or meaning", "Select all visible", "Clear selection", "Inspect exactly what will change", "Choose a World", "+ New", "Cancel", "Confirm", "Undo"])
+  for (const phrase of ["Batch review", "Start with repeated patterns", "Exact account, normalized description, direction and current meaning must agree", "Inspect representative evidence", "Select this batch", "exact reviewed batch", "actionTokens: selected.map", "Search merchant or description", "All accounts", "Inflow and outflow", "World, category or meaning", "Select all visible", "Clear selection", "Inspect exactly what will change", "Choose a World", "+ New", "Cancel", "Confirm", "Undo"])
     assert.equal(form.includes(phrase), true, phrase);
 });
 

@@ -162,6 +162,7 @@ test("canonical economic semantics reconstruct life activity without direction o
     transaction({ id: "atm", date: "2026-07-09", amount: 60, meaning: "cash-withdrawal", world: "cash" }),
     transaction({ id: "fee", date: "2026-07-10", amount: 30.95, meaning: "fee", category: "Banking Fees", world: "cash" }),
     transaction({ id: "fee-rebate", date: "2026-07-11", amount: 30.95, direction: "inflow", meaning: "refund", category: "Banking Fees", world: "cash" }),
+    transaction({ id: "wellness", date: "2026-07-11", amount: 100, direction: "inflow", meaning: "reimbursement", category: "Workplace Wellness Benefit", world: "income" }),
     transaction({ id: "mortgage", date: "2026-07-12", amount: 1000, meaning: "expense", category: "Mortgage", world: "home" }),
     transaction({ id: "mystery-in", date: "2026-07-13", amount: 50, direction: "inflow", meaning: "unknown" }),
     transaction({ id: "mystery-out", date: "2026-07-14", amount: 40, meaning: "unknown" }),
@@ -180,7 +181,7 @@ test("canonical economic semantics reconstruct life activity without direction o
   const imported: ImportJournalRecord = { importId: "coverage", sourceSha256: "coverage", providerId: "td", accountType: "chequing", accountId: "cash", parserVersion: "v1", statementPeriodStart: "2026-07-01", statementPeriodEnd: "2026-07-31", sourceFormat: "pdf", receivedAt: "2026-08-01T00:00:00Z", processingStartedAt: null, proposedAt: null, committedAt: "2026-08-01T00:00:00Z", status: "committed", parsedTransactionCount: items.length, committedTransactionCount: items.length, duplicateTransactionCount: 0, safeErrorCode: null, schemaVersion: 1 };
   const july = buildHistoricalFinancialFlow({ transactions: items, imports: [imported], investmentSnapshots: [], accountNames: new Map([["cash", "Cash"], ["card", "Card"]]), genuinelyUnknownIds: new Set(["mystery-in", "mystery-out"]), startMonth: "2026-07", endDate: "2026-07-31" }).months[0];
   assert.equal(july.moneyIn, 5000);
-  assert.equal(july.nonRegularEconomicInflows, 6080.95);
+  assert.equal(july.nonRegularEconomicInflows, 6180.95);
   assert.equal(july.discretionaryConsumption, 210.95);
   assert.equal(july.unallocatedMoney.status, "partial");
   assert.equal(july.observedRequiredCosts, 1000);
