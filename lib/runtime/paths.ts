@@ -16,6 +16,7 @@ export const founderRuntimePaths = (home = os.homedir()) => {
     ingestionDatabase: path.join(root, "databases", "ingestion.sqlite"),
     reviewDatabase: path.join(root, "databases", "review.sqlite"),
     relationshipDatabase: path.join(root, "databases", "relationships.sqlite"),
+    providerDatabase: path.join(root, "databases", "providers.sqlite"),
     auditFile: path.join(root, "audit", "events.jsonl"),
     statementFolder: path.join(home, "Documents", "Vorvex Bank Statements"),
     statementApprovedRoot: path.join(home, "Documents", "Vorvex Bank Statements"),
@@ -27,6 +28,7 @@ export const applyFounderRuntimeEnvironment = (home?: string) => {
   process.env.VORVEX_INGESTION_DATABASE_PATH = paths.ingestionDatabase;
   process.env.VORVEX_REVIEW_DATABASE_PATH = paths.reviewDatabase;
   process.env.VORVEX_RELATIONSHIP_DATABASE_PATH = paths.relationshipDatabase;
+  process.env.VORVEX_PROVIDER_DATABASE_PATH = paths.providerDatabase;
   process.env.VORVEX_FINANCIAL_SNAPSHOT_DIR = paths.canonicalSnapshot;
   process.env.VORVEX_BANK_STATEMENTS_DIR = paths.statementFolder;
   return paths;
