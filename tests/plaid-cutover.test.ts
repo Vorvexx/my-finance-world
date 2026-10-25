@@ -34,6 +34,8 @@ test("actual Plaid sync replaces pending with posted and applies removals", asyn
 test("setup rejects foreign origins, rebinding hosts and malformed credentials", () => {
   const request = (origin: string, host = "127.0.0.1:3210") => new Request("http://127.0.0.1:3210/api/connections/plaid/configure", { method: "POST", headers: { origin, host, "sec-fetch-site": "same-origin", "content-type": "application/json" } });
   assert.equal(isLocalSetupRequest(request("http://127.0.0.1:3210")), true);
+  // Next.js normalizes the internal URL to localhost while preserving browser headers.
+  assert.equal(isLocalSetupRequest(new Request("http://localhost:3210/api/connections/plaid/configure", { method: "POST", headers: { host: "127.0.0.1:3210", origin: "http://127.0.0.1:3210", "sec-fetch-site": "same-origin", "content-type": "application/json" } })), true);
   assert.equal(isLocalSetupRequest(request("https://attacker.invalid")), false);
   assert.equal(isLocalSetupRequest(request("http://127.0.0.1:3210", "attacker.invalid")), false);
   assert.equal(validatePlaidSetup({ clientId: "x", secret: "y" }), false);

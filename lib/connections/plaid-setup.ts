@@ -4,7 +4,8 @@ import { founderRuntimePaths } from "../runtime/paths.ts";
 export const isLocalSetupRequest = (request: Request) => {
   const url = new URL(request.url);
   return ["127.0.0.1:3210", "localhost:3210"].includes(url.host) &&
-    request.headers.get("host") === url.host && request.headers.get("origin") === url.origin &&
+    ["127.0.0.1:3210", "localhost:3210"].includes(request.headers.get("host") ?? "") &&
+    request.headers.get("origin") === `http://${request.headers.get("host")}` &&
     request.headers.get("sec-fetch-site") === "same-origin" &&
     request.headers.get("content-type") === "application/json";
 };

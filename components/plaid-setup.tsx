@@ -12,7 +12,7 @@ export default function PlaidSetup() {
       const response = await fetch("/api/connections/plaid/configure", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: fields.get("clientId"), secret: fields.get("secret") }) });
       form.reset();
       if (response.ok) location.reload();
-      else setMessage("Setup was not completed. Check your Production credentials and local Keychain access.");
+      else { const body = await response.json() as { message?: string }; setMessage(body.message ?? "Setup was not completed. Check your Production credentials and local Keychain access."); }
     } catch { form.reset(); setMessage("Setup could not be saved."); }
     finally { setBusy(false); }
   };
